@@ -10,6 +10,7 @@ import {
   mutation,
   query,
 } from "./_generated/server";
+import schema from "./schema";
 
 export const version = query({
   args: {},
@@ -41,6 +42,7 @@ export const pull = query({
 });
 
 export const send = mutation({
+  args: schema.tables.messages.validator.fields.message,
   handler: async (ctx, args) => {
     // TODO: add sequence number
     const version = (await getMaxVersion(ctx)) + 1;

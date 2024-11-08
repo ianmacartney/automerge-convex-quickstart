@@ -18,6 +18,7 @@ import {
 } from "@automerge/automerge-repo-network-websocket";
 import { ConvexClient } from "convex/browser";
 import { ConvexReactClient, Watch } from "convex/react";
+
 export const toArrayBuffer = (bytes: Uint8Array) => {
   const { buffer, byteOffset, byteLength } = bytes;
   return buffer.slice(byteOffset, byteOffset + byteLength);
@@ -44,19 +45,26 @@ export class ConvexNetworkAdapter extends NetworkAdapter {
   });
   #version: number;
   isReady() {
-    return true;
-    // return this.#ready;
+    // return true;
+    return this.#ready;
   }
 
   whenReady() {
-    return Promise.resolve();
-    // return this.#readyPromise;
+    // return Promise.resolve();
+    return this.#readyPromise;
   }
 
-  #forceReady() {
+  #forceReady(version: number) {
     if (!this.#ready) {
       this.#ready = true;
       this.#readyResolver!();
+      this.emit("peer-candidate", {
+        peerId: "convex" as PeerId,
+        peerMetadata: {
+          storageId: String(version) as StorageId,
+          isEphemeral: false,
+        },
+      });
     }
   }
 
@@ -70,15 +78,12 @@ export class ConvexNetworkAdapter extends NetworkAdapter {
     this.#version = 0;
   }
 
-  #watch: Watch<number> | undefined;
-
   connect(peerId: PeerId, peerMetadata?: PeerMetadata) {
     console.debug("ConvexNetworkAdapter connect", peerId, peerMetadata);
     this.peerId = peerId;
     this.peerMetadata = peerMetadata;
 
     const watch = this.#client.watchQuery(api.automerge.version, {});
-    // this.#watch = watch;
     // TODO: do we need to handle unsubscribe?
     watch.onUpdate(() => {
       const version = watch.localQueryResult();
@@ -91,16 +96,6 @@ export class ConvexNetworkAdapter extends NetworkAdapter {
     if (version) {
       this.#sync(version);
     }
-    setTimeout(() => {
-      this.#forceReady();
-      this.emit("peer-candidate", {
-        peerId: "convex" as PeerId,
-        peerMetadata: {
-          storageId: "convex" as StorageId,
-          isEphemeral: true,
-        },
-      });
-    }, 1000);
     // TODO: when do we emit peer-disconnected?
     // this.emit("peer-disconnected", { peerId: senderId });
 
@@ -108,37 +103,47 @@ export class ConvexNetworkAdapter extends NetworkAdapter {
   }
 
   #sync(version: number) {
-    if (version && version > this.#version) {
-      console.debug("sync", version, this.#version);
-      this.#client
-        .query(api.automerge.pull, {
-          after: this.#version,
-        })
-        .then((results) => {
-          if (results.length === 0) {
-            throw new Error(
-              `No results from pull on version mismatch: ${this.#version} -> ${version}`
-            );
-          }
-          console.debug("pulled", results);
-          for (const result of results) {
-            if (result.version < this.#version) {
-              continue;
-            }
-            console.debug("message", result.message);
-            if (!("data" in result.message)) {
-              this.emit("message", result.message);
-            } else {
-              const data = result.message.data as ArrayBufferLike;
-              this.emit("message", {
-                ...result.message,
-                data: new Uint8Array(data),
-              });
-            }
-          }
-          this.#version = results[results.length - 1].version;
-        });
+    this.#forceReady(version);
+    if (version <= this.#version) {
+      console.debug("ignoring sync", version, this.#version);
     }
+    const peerId = this.peerId;
+    if (!peerId) {
+      throw new Error("Peer ID not set");
+    }
+    console.debug("sync", version, this.#version);
+    this.#client
+      .query(api.automerge.pull, {
+        after: this.#version,
+      })
+      .then((results) => {
+        if (results.length === 0) {
+          throw new Error(
+            `No results from pull on version mismatch: ${this.#version} -> ${version}`
+          );
+        }
+        console.debug("pulled", results);
+        for (const result of results) {
+          if (result.message.senderId === peerId) {
+            console.debug("ignoring message from self", result.version);
+            continue;
+          }
+          if (result.version < this.#version) {
+            continue;
+          }
+          console.debug("message", result.message);
+          const message = result.message;
+          const data = message.data ? new Uint8Array(message.data) : undefined;
+          this.emit("message", {
+            documentId: message.documentId,
+            senderId: message.targetId, // convex
+            targetId: peerId,
+            type: message.type,
+            data,
+          });
+        }
+        this.#version = results[results.length - 1].version;
+      });
   }
 
   remotePeerId?: PeerId;
@@ -152,7 +157,6 @@ export class ConvexNetworkAdapter extends NetworkAdapter {
     if (!this.#client) {
       throw new Error("Client not connected");
     }
-    this.#forceReady();
     this.remotePeerId = remotePeerId;
     this.emit("peer-candidate", {
       peerId: remotePeerId,
@@ -168,15 +172,17 @@ export class ConvexNetworkAdapter extends NetworkAdapter {
     }
     // TODO: single flight
     if ("data" in message) {
-      this.#client.mutation(api.automerge.send, {
-        ...message,
-        data: message.data
-          ? message.data.buffer.slice(
-              message.data.byteOffset,
-              message.data.byteOffset + message.data.byteLength
-            )
-          : undefined,
-      });
+      this.#client
+        .mutation(api.automerge.send, {
+          ...message,
+          data: message.data ? toArrayBuffer(message.data) : undefined,
+        })
+        .then((version) => {
+          if (version === this.#version + 1) {
+            this.#version = version;
+            console.debug("send success", version);
+          }
+        });
     } else {
       this.#client.mutation(api.automerge.send, message);
     }
