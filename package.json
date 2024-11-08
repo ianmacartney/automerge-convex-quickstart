@@ -10,10 +10,11 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@automerge/automerge-repo": "^1.1.2",
-    "@automerge/automerge-repo-network-websocket": "^1.1.2",
-    "@automerge/automerge-repo-react-hooks": "^1.1.2",
-    "@automerge/automerge-repo-storage-indexeddb": "^1.1.2",
+    "@automerge/automerge-repo": "^1.2.1",
+    "@automerge/automerge-repo-network-broadcastchannel": "^1.2.1",
+    "@automerge/automerge-repo-network-websocket": "^1.2.1",
+    "@automerge/automerge-repo-react-hooks": "^1.2.1",
+    "@automerge/automerge-repo-storage-indexeddb": "^1.2.1",
     "@picocss/pico": "^2.0.6",
     "convex": "^1.17.0",
     "react": "^18.2.0",
