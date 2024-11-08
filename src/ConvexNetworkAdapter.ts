@@ -87,13 +87,13 @@ export class ConvexNetworkAdapter extends NetworkAdapter {
     // TODO: do we need to handle unsubscribe?
     watch.onUpdate(() => {
       const version = watch.localQueryResult();
-      if (version) {
+      if (version !== undefined) {
         this.#sync(version);
       }
     });
     // In case there's already a subscription elsewhere
     const version = watch.localQueryResult();
-    if (version) {
+    if (version !== undefined) {
       this.#sync(version);
     }
     // TODO: when do we emit peer-disconnected?
@@ -136,7 +136,7 @@ export class ConvexNetworkAdapter extends NetworkAdapter {
           const data = message.data ? new Uint8Array(message.data) : undefined;
           this.emit("message", {
             documentId: message.documentId,
-            senderId: message.targetId, // convex
+            senderId: message.senderId, // convex
             targetId: peerId,
             type: message.type,
             data,
