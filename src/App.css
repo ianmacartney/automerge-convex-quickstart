@@ -1,12 +1,12 @@
 #root {
   max-width: 1280px;
-  max-height: 800px;
   margin: 0 auto;
   padding: 2rem;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: flex-start;
+  min-height: 100vh;
 }
 
 header {
@@ -16,6 +16,10 @@ header {
 
 footer {
   margin-top: 2rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
 }
 
 #task-list {
@@ -35,15 +39,39 @@ footer {
   margin: 0;
 }
 
-.task input[type='text'] {
-  background-color: var(--pico-secondary-background);
+.logos {
+  font-size: 3.5em;
+  font-weight: bold;
+  margin: 0 0.5rem;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  justify-content: center;
 }
-
-.task input[type='checkbox']:not(:checked) {
-  background-color: var(--pico-secondary-background);
-}
-
 
 .read-the-docs {
   color: #888;
+  margin: 0;
+}
+
+.github-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  font-size: 0.9rem;
+  color: #24292e;
+  background-color: #fafbfc;
+  border: 1px solid rgba(27, 31, 35, 0.15);
+  border-radius: 6px;
+  text-decoration: none;
+}
+
+.github-button:hover {
+  background-color: #f3f4f6;
+}
+
+.github-button svg {
+  width: 20px;
+  height: 20px;
 }
