@@ -54,14 +54,16 @@ export class ConvexNetworkAdapter extends NetworkAdapter {
     return this.#readyPromise;
   }
 
-  #forceReady(version: number) {
+  #forceReady() {
     if (!this.#ready) {
       this.#ready = true;
       this.#readyResolver!();
+      this.emit("ready", {
+        network: this,
+      });
       this.emit("peer-candidate", {
         peerId: "convex" as PeerId,
         peerMetadata: {
-          storageId: String(version) as StorageId,
           isEphemeral: false,
         },
       });
@@ -103,7 +105,7 @@ export class ConvexNetworkAdapter extends NetworkAdapter {
   }
 
   #sync(version: number) {
-    this.#forceReady(version);
+    this.#forceReady();
     if (version <= this.#version) {
       console.debug("ignoring sync", version, this.#version);
     }
