@@ -15,6 +15,7 @@
     "@automerge/automerge-repo-react-hooks": "^1.1.2",
     "@automerge/automerge-repo-storage-indexeddb": "^1.1.2",
     "@picocss/pico": "^2.0.6",
+    "convex": "^1.17.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "vite-plugin-wasm": "^3.2.2"
