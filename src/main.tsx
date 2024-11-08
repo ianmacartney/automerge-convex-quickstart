@@ -4,13 +4,17 @@ import App, { type TaskList } from "./App.tsx";
 
 import "./index.css";
 import { isValidAutomergeUrl, Repo } from "@automerge/automerge-repo";
-import { BrowserWebSocketClientAdapter } from "@automerge/automerge-repo-network-websocket";
+// import { BrowserWebSocketClientAdapter } from "@automerge/automerge-repo-network-websocket";
 import { IndexedDBStorageAdapter } from "@automerge/automerge-repo-storage-indexeddb";
+// import { BroadcastChannelNetworkAdapter } from "@automerge/automerge-repo-network-broadcastchannel";
 import { RepoContext } from "@automerge/automerge-repo-react-hooks";
-import { ConvexNetworkAdapter } from "./ConvexNetworkAdapter.ts";
+// import { ConvexNetworkAdapter } from "./ConvexNetworkAdapter.ts";
 
 const repo = new Repo({
-  network: [new ConvexNetworkAdapter()],
+  // network: [new BrowserWebSocketClientAdapter("ws://sync.automerge.org")],
+  // network: [new ConvexNetworkAdapter()],
+  // network: [new BroadcastChannelNetworkAdapter()],
+  network: [],
   storage: new IndexedDBStorageAdapter(),
 });
 
