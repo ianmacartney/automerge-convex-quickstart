@@ -1,29 +1,21 @@
-import automergeLogo from '/automerge.png'
-import '@picocss/pico/css/pico.min.css'
-import './App.css'
-import { useDocument } from '@automerge/automerge-repo-react-hooks'
-import { updateText } from '@automerge/automerge/next'
-import type { AutomergeUrl } from '@automerge/automerge-repo'
-
-export interface Task {
-  title: string
-  done: boolean
-}
-
-export interface TaskList {
-  tasks: Task[]
-}
+import automergeLogo from "/automerge.png";
+import "@picocss/pico/css/pico.min.css";
+import "./App.css";
+import { useDocument } from "@automerge/automerge-repo-react-hooks";
+import { updateText } from "@automerge/automerge/next";
+import type { AutomergeUrl } from "@automerge/automerge-repo";
+import type { TaskList } from "../convex/types";
 
 function App({ docUrl }: { docUrl: AutomergeUrl }) {
-  const [doc, changeDoc] = useDocument<TaskList>(docUrl)
+  const [doc, changeDoc] = useDocument<TaskList>(docUrl);
 
   function addTask() {
     changeDoc((d) =>
       d.tasks.unshift({
-        title: '',
+        title: "",
         done: false,
-      }),
-    )
+      })
+    );
   }
   return (
     <>
@@ -47,7 +39,7 @@ function App({ docUrl }: { docUrl: AutomergeUrl }) {
                 checked={done}
                 onChange={() =>
                   changeDoc((d) => {
-                    d.tasks[index].done = !d.tasks[index].done
+                    d.tasks[index].done = !d.tasks[index].done;
                   })
                 }
               />
@@ -55,20 +47,20 @@ function App({ docUrl }: { docUrl: AutomergeUrl }) {
               <input
                 type="text"
                 placeholder="What needs doing?"
-                value={title || ''}
+                value={title || ""}
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    addTask()
+                  if (e.key === "Enter") {
+                    addTask();
                   }
                 }}
                 onChange={(e) =>
                   changeDoc((d) => {
                     // Use Automerge's updateText for efficient multiplayer edits
                     // (as opposed to replacing the whole title on each edit)
-                    updateText(d.tasks[index], ['title'], e.target.value)
+                    updateText(d.tasks[index], ["title"], e.target.value);
                   })
                 }
-                style={done ? { textDecoration: 'line-through' } : {}}
+                style={done ? { textDecoration: "line-through" } : {}}
               />
             </div>
           ))}
@@ -80,7 +72,7 @@ function App({ docUrl }: { docUrl: AutomergeUrl }) {
         </p>
       </footer>
     </>
-  )
+  );
 }
 
-export default App
+export default App;

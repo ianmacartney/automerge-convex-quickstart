@@ -1,10 +1,12 @@
 import {
   Chunk,
   DocumentId,
+  PeerId,
   StorageAdapterInterface,
   StorageKey,
 } from "@automerge/automerge-repo";
 import { DatabaseReader, DatabaseWriter } from "./_generated/server";
+import { StorageId } from "convex/server";
 
 function parseKey(keyOrPrefix: StorageKey) {
   const [documentId, type, hash] = keyOrPrefix;
@@ -22,7 +24,10 @@ function parseKey(keyOrPrefix: StorageKey) {
 }
 
 export class ConvexStorageAdapter implements StorageAdapterInterface {
-  constructor(public ctx: { db: DatabaseReader | DatabaseWriter }) {}
+  constructor(
+    public ctx: { db: DatabaseReader | DatabaseWriter },
+    public storageId: StorageId = process.env.CONVEX_CLOUD_URL as StorageId
+  ) {}
   keyQuery(key: StorageKey, prefix: boolean = false) {
     if (key.length > 3) {
       throw new Error("Invalid key length");
@@ -31,7 +36,7 @@ export class ConvexStorageAdapter implements StorageAdapterInterface {
     return this.ctx.db.query("automerge").withIndex("doc_type_hash", (q) => {
       const docQ = q.eq("documentId", documentId as DocumentId);
       if (!type) {
-        if (!prefix) throw new Error(`Key missing type: ${prefix}`);
+        if (!prefix) throw new Error(`Key missing type: ${key}`);
         return docQ;
       }
       const typeQ = docQ.eq("type", type);
@@ -44,6 +49,10 @@ export class ConvexStorageAdapter implements StorageAdapterInterface {
   }
   /** Load the single value corresponding to `key` */
   async load(key: StorageKey): Promise<Uint8Array | undefined> {
+    if (key.length === 1 && key[0] === "storage-adapter-id") {
+      // We use the storageId
+      return new TextEncoder().encode(this.storageId);
+    }
     const doc = await this.keyQuery(key).unique();
     if (!doc) return undefined;
     return new Uint8Array(doc.data);
@@ -51,6 +60,9 @@ export class ConvexStorageAdapter implements StorageAdapterInterface {
 
   /** Save the value `data` to the key `key` */
   async save(key: StorageKey, data: Uint8Array): Promise<void> {
+    if (key.length === 1 && key[0] === "storage-adapter-id") {
+      return;
+    }
     const existing = await this.keyQuery(key).unique();
     if (!isDatabaseWriter(this.ctx.db)) {
       throw new Error("Trying to save from a query!");

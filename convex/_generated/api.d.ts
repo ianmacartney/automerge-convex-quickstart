@@ -15,6 +15,7 @@ import type {
 } from "convex/server";
 import type * as ConvexStorageAdapter from "../ConvexStorageAdapter.js";
 import type * as automerge from "../automerge.js";
+import type * as types from "../types.js";
 
 /**
  * A utility for referencing Convex functions in your app's API.
@@ -27,6 +28,7 @@ import type * as automerge from "../automerge.js";
 declare const fullApi: ApiFromModules<{
   ConvexStorageAdapter: typeof ConvexStorageAdapter;
   automerge: typeof automerge;
+  types: typeof types;
 }>;
 export declare const api: FilterApi<
   typeof fullApi,

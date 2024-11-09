@@ -10,7 +10,11 @@ import {
   mutation,
   query,
 } from "./_generated/server";
-import schema from "./schema";
+import schema, { vDocumentId } from "./schema";
+import * as A from "@automerge/automerge/slim/next";
+import { DocHandle, PeerId, Repo } from "@automerge/automerge-repo";
+import { ConvexStorageAdapter } from "./ConvexStorageAdapter";
+import { TaskList } from "./types";
 
 export const version = query({
   args: {},
@@ -48,5 +52,100 @@ export const send = mutation({
     const version = (await getMaxVersion(ctx)) + 1;
     await ctx.db.insert("messages", { message: args, version });
     return version;
+  },
+});
+
+const peerId = process.env.CONVEX_CLOUD_URL as PeerId;
+
+export const create = mutation({
+  args: {
+    documentId: vDocumentId,
+    data: v.bytes(),
+  },
+  handler: async (ctx, args) => {
+    const repo = new Repo({
+      network: [],
+      storage: new ConvexStorageAdapter(ctx),
+      peerId,
+      isEphemeral: true,
+      sharePolicy: async () => false,
+    });
+    const doc = A.load(new Uint8Array(args.data));
+    const handle = new DocHandle(args.documentId, {
+      isNew: true,
+      initialValue: doc,
+    });
+    repo.emit("document", { handle, isNew: true });
+    await repo.flush([args.documentId]);
+  },
+});
+
+export const testAdd = internalMutation({
+  args: {},
+  handler: async (ctx, args) => {
+    const repo = new Repo({
+      network: [],
+      storage: new ConvexStorageAdapter(ctx),
+      peerId,
+      isEphemeral: true,
+      sharePolicy: async () => false,
+    });
+    const handle = repo.create<TaskList>({
+      tasks: [{ title: "test", done: false }],
+    });
+    await repo.flush([handle.documentId]);
+    return [handle.documentId, await A.save(handle.docSync()!)];
+  },
+});
+
+export const sync = mutation({
+  args: {
+    documentId: vDocumentId,
+    headsBefore: v.array(v.string()),
+    changes: v.array(v.bytes()),
+  },
+  handler: async (ctx, args) => {
+    const repo = new Repo({
+      network: [],
+      storage: new ConvexStorageAdapter(ctx),
+      peerId,
+      isEphemeral: true,
+      sharePolicy: async () => false,
+    });
+    const handle = repo.find<{ tasks: { title: string; done: boolean }[] }>(
+      args.documentId
+    );
+    await handle.whenReady(["ready", "deleted", "unavailable"]);
+    if (handle.state === "deleted") {
+      // TODO: un-delete document?
+      return { deleted: true } as const;
+    }
+    if (handle.state === "unavailable") {
+      throw new Error("Document unavailable - create it first.");
+    } else if (handle.state === "ready") {
+      handle.change((doc) =>
+        A.applyChanges(
+          doc,
+          args.changes.map((c) => new Uint8Array(c))
+        )
+      );
+    } else {
+      throw new Error("handle in bad state:" + handle.state);
+    }
+    await repo.flush([args.documentId]);
+    return;
+
+    /**
+           const patches = A.diff(after, A.getHeads(before), A.getHeads(after))
+      if (patches.length > 0) {
+        this.emit("change", {
+          handle: this,
+          doc: after,
+          patches,
+          // TODO: pass along the source (load/change/network)
+          patchInfo: { before, after, source: "change" },
+        })
+      }
+     */
   },
 });
