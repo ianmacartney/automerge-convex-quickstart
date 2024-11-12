@@ -91,6 +91,10 @@ export const submitChange = mutation({
   },
 });
 
+/**
+ * A more manual version of syncQuery.
+ * This loads the change since the explicit heads and the new heads.
+ */
 export const getChange = query({
   args: { documentId: vDocumentId, sinceHeads: v.array(v.string()) },
   handler: async (ctx, args) => {
@@ -164,6 +168,31 @@ export const heads = query({
     const doc = await loadDoc(ctx, args.documentId);
     const A = await automergeLoaded();
     return A.getHeads(doc);
+  },
+});
+
+/**
+ * Use automerge's sync protocol to merge a document with a remote document.
+ */
+export const syncQuery = query({
+  args: { documentId: vDocumentId, data: v.bytes(), state: v.bytes() },
+  handler: async (ctx, args) => {
+    const doc = await loadDoc(ctx, args.documentId);
+    const A = await automergeLoaded();
+    const state = A.decodeSyncState(new Uint8Array(args.state));
+    const [newDoc, newState] = A.receiveSyncMessage(
+      doc,
+      state,
+      new Uint8Array(args.data)
+    );
+    if (!A.hasHeads(doc, A.getHeads(newDoc))) {
+      throw new Error("Syncing query shouldn't modify heads: do changes first");
+    }
+    const [newState2, syncMessage] = A.generateSyncMessage(newDoc, newState);
+    return {
+      syncMessage: syncMessage ? toArrayBuffer(syncMessage) : null,
+      state: toArrayBuffer(A.encodeSyncState(newState2)),
+    };
   },
 });
 

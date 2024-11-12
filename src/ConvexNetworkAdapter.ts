@@ -47,6 +47,9 @@ export class ConvexNetworkAdapter extends NetworkAdapter {
   #subscriptions: {
     [key: DocumentId]: { watch: Watch<A.Heads>; unsubscribe: () => void };
   } = {};
+  #syncState: {
+    [key: DocumentId]: ArrayBuffer;
+  } = {};
 
   constructor(options?: ConvexNetworkAdapterOptions) {
     console.debug("ConvexNetworkAdapter constructor");
@@ -190,50 +193,72 @@ export class ConvexNetworkAdapter extends NetworkAdapter {
         // const theirLatestHeads = syncMsg
         const sync = async () => {
           if (syncMsg.changes.length > 0) {
+            console.debug("submitting changes", syncMsg.changes);
             await this.#client.mutation(api.automerge.submitChange, {
               change: toArrayBuffer(mergeArrays(syncMsg.changes)),
-              documentId: message.documentId,
+              documentId,
             });
           }
-          if (syncMsg.need.length > 0) {
-            const change = await this.#client.query(api.automerge.getChange, {
-              documentId: message.documentId,
-              sinceHeads: syncMsg.heads,
-            });
-            if (change.change) {
-              this.emit("message", {
-                type: "sync",
-                senderId: remoteIds.peerId,
-                targetId: peerId,
-                documentId: message.documentId,
-                data: A.encodeSyncMessage({
-                  changes: [new Uint8Array(change.change)],
-                  heads: change.heads,
-                  // Hoping these are fine to send empty
-                  have: [],
-                  need: [],
-                }),
-              } as SyncMessage);
-            }
-          } else {
-            const heads =
-              this.#subscriptions[message.documentId]?.watch.localQueryResult();
-            if (!heads) {
-              throw new Error("No heads found");
-            }
+          const state =
+            this.#syncState[documentId] ||
+            toArrayBuffer(A.encodeSyncState(A.initSyncState()));
+          console.debug("syncQuery", A.decodeSyncState(new Uint8Array(state)));
+          const msg = await this.#client.query(api.automerge.syncQuery, {
+            documentId,
+            data: toArrayBuffer(message.data),
+            state,
+          });
+          this.#syncState[documentId] = msg.state;
+          if (msg.syncMessage) {
             this.emit("message", {
+              documentId,
               type: "sync",
               senderId: remoteIds.peerId,
               targetId: peerId,
-              documentId: message.documentId,
-              data: A.encodeSyncMessage({
-                changes: [],
-                heads,
-                have: [],
-                need: [],
-              }),
-            } as SyncMessage);
+              data: new Uint8Array(msg.syncMessage),
+            });
           }
+          // if (syncMsg.need.length > 0) {
+          //   const change = await this.#client.query(api.automerge.getChange, {
+          //     documentId: message.documentId,
+          //     sinceHeads: syncMsg.heads,
+          //   });
+          //   if (change.change) {
+          //     console.debug("changes", change);
+          //     this.emit("message", {
+          //       type: "sync",
+          //       senderId: remoteIds.peerId,
+          //       targetId: peerId,
+          //       documentId: message.documentId,
+          //       data: A.encodeSyncMessage({
+          //         changes: [new Uint8Array(change.change)],
+          //         heads: change.heads,
+          //         // Hoping these are fine to send empty
+          //         have: [],
+          //         need: [],
+          //       }),
+          //     } as SyncMessage);
+          //   }
+          // } else {
+          //   const heads =
+          //     this.#subscriptions[message.documentId]?.watch.localQueryResult();
+          //   console.debug("no changes", heads);
+          //   // if (!heads) {
+          //   //   throw new Error("No heads found");
+          //   // }
+          //   // this.emit("message", {
+          //   //   type: "sync",
+          //   //   senderId: remoteIds.peerId,
+          //   //   targetId: peerId,
+          //   //   documentId,
+          //   //   data: A.encodeSyncMessage({
+          //   //     changes: [],
+          //   //     heads,
+          //   //     have: [],
+          //   //     need: [],
+          //   //   }),
+          //   // } as SyncMessage);
+          // }
         };
         sync().catch(console.error);
 
