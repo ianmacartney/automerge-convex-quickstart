@@ -31,25 +31,24 @@ import { mergeArrays } from "@automerge/automerge-repo/helpers/mergeArrays.js";
 import { headsAreSame } from "@automerge/automerge-repo/helpers/headsAreSame.js";
 
 console.time("initializeBase64Wasm");
-void Automerge.initializeBase64Wasm(automergeWasmBase64 as string).then(() =>
-  console.timeEnd("initializeBase64Wasm")
-);
+const loaded = Automerge.initializeBase64Wasm(
+  automergeWasmBase64 as string
+).then(() => console.timeEnd("initializeBase64Wasm"));
 
-async function loadAutomerge() {
-  await Automerge.wasmInitialized();
+async function automergeLoaded() {
+  await loaded;
   return Automerge;
 }
 /**
  * Incremental changes version
  */
-
 export const submitSnapshot = mutation({
   args: {
     documentId: vDocumentId,
     data: v.bytes(),
   },
   handler: async (ctx, args) => {
-    const A = await loadAutomerge();
+    const A = await automergeLoaded();
     const newDoc = A.load(new Uint8Array(args.data));
     const hash = headsHash(A.getHeads(newDoc));
     const existing = await ctx.db
@@ -87,11 +86,11 @@ export const submitChange = mutation({
   },
 });
 
-export const getDelta = query({
+export const getChange = query({
   args: { documentId: vDocumentId, sinceHeads: v.array(v.string()) },
   handler: async (ctx, args) => {
     const doc = await loadDoc(ctx, args.documentId);
-    const A = await loadAutomerge();
+    const A = await automergeLoaded();
     const change = A.saveSince(doc, args.sinceHeads);
     return {
       change: toArrayBuffer(change),
@@ -119,7 +118,7 @@ export const compact = mutation({
       .query("automerge")
       .withIndex("doc_type_hash", (q) => q.eq("documentId", args.documentId))
       .collect();
-    const A = await loadAutomerge();
+    const A = await automergeLoaded();
     const doc = A.loadIncremental(
       A.init(),
       mergeArrays(result.map((r) => new Uint8Array(r.data)))
@@ -140,7 +139,7 @@ async function loadDoc(ctx: { db: DatabaseReader }, documentId: DocumentId) {
     .query("automerge")
     .withIndex("doc_type_hash", (q) => q.eq("documentId", documentId))
     .collect();
-  const A = await loadAutomerge();
+  const A = await automergeLoaded();
   return A.loadIncremental<TaskList>(
     A.init(),
     mergeArrays(result.map((r) => new Uint8Array(r.data)))
@@ -150,14 +149,9 @@ async function loadDoc(ctx: { db: DatabaseReader }, documentId: DocumentId) {
 export const heads = query({
   args: { documentId: vDocumentId },
   handler: async (ctx, args) => {
-    const result = await ctx.db
-      .query("automerge")
-      .withIndex("doc_type_hash", (q) => q.eq("documentId", args.documentId))
-      .collect();
-    const hashes = result.map((r) => r.hash);
     const doc = await loadDoc(ctx, args.documentId);
-    const A = await loadAutomerge();
-    return { heads: A.getHeads(doc), hashes };
+    const A = await automergeLoaded();
+    return A.getHeads(doc);
   },
 });
 
@@ -181,7 +175,7 @@ export const testAdd = internalMutation({
     // const doc = A.load<TaskList>();
     const documentId = "eNEmGYHnwmXkhiWVuzT6CNQvKYa" as DocumentId;
     const orig = await loadDoc(ctx, documentId);
-    const A = await loadAutomerge();
+    const A = await automergeLoaded();
     // To update and submit a new snapshot:
     const doc = A.change(orig, (doc) => {
       doc.tasks[0].title = "test2";
@@ -217,7 +211,7 @@ export const testToggle = mutation({
       .query("automerge")
       .withIndex("doc_type_hash", (q) => q.eq("documentId", args.documentId))
       .collect();
-    const A = await loadAutomerge();
+    const A = await automergeLoaded();
     const doc = A.loadIncremental<TaskList>(
       A.init(),
       mergeArrays(result.map((r) => new Uint8Array(r.data)))
@@ -236,7 +230,7 @@ export const testToggle = mutation({
       documentId: args.documentId,
       change: toArrayBuffer(change),
     });
-    const delta = await ctx.runQuery(api.automerge.getDelta, {
+    const delta = await ctx.runQuery(api.automerge.getChange, {
       documentId: args.documentId,
       sinceHeads: sinceHeads,
     });
