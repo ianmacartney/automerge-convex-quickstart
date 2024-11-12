@@ -1,10 +1,9 @@
 import "./_patch";
 import * as Automerge from "@automerge/automerge/slim/next";
-import {
-  DocHandle,
+import type {
   DocumentId,
   PeerId,
-  Repo,
+  StorageId,
 } from "@automerge/automerge-repo/slim";
 // @ts-expect-error wasm is not a module
 import { automergeWasmBase64 } from "@automerge/automerge/automerge.wasm.base64.js";
@@ -13,22 +12,16 @@ import { hash as sha256 } from "fast-sha256";
 // import wasm from "@automerge/automerge/automerge.wasm?url";
 
 import { v } from "convex/values";
-import { api, internal } from "./_generated/api";
-import { Doc, Id } from "./_generated/dataModel";
+import { api } from "./_generated/api";
 import {
-  action,
   DatabaseReader,
-  internalAction,
   internalMutation,
-  internalQuery,
   mutation,
   query,
 } from "./_generated/server";
-import schema, { vDocumentId } from "./schema";
-import { ConvexStorageAdapter, toArrayBuffer } from "./ConvexStorageAdapter";
+import { vDocumentId } from "./schema";
 import { TaskList } from "./types";
 import { mergeArrays } from "@automerge/automerge-repo/helpers/mergeArrays.js";
-import { headsAreSame } from "@automerge/automerge-repo/helpers/headsAreSame.js";
 
 console.time("initializeBase64Wasm");
 const loaded = Automerge.initializeBase64Wasm(
@@ -39,6 +32,18 @@ async function automergeLoaded() {
   await loaded;
   return Automerge;
 }
+
+export const ids = query({
+  args: {},
+  handler: async () => {
+    return {
+      peerId: (process.env.PEER_ID ?? process.env.CONVEX_CLOUD_URL) as PeerId,
+      storageId: (process.env.STORAGE_ID ??
+        process.env.CONVEX_CLOUD_URL) as StorageId,
+    };
+  },
+});
+
 /**
  * Incremental changes version
  */
@@ -270,3 +275,8 @@ export function headsHash(heads: Automerge.Heads): string {
   const headsbinary = mergeArrays(heads.map((h: string) => encoder.encode(h)));
   return keyHash(headsbinary);
 }
+
+export const toArrayBuffer = (bytes: Uint8Array) => {
+  const { buffer, byteOffset, byteLength } = bytes;
+  return buffer.slice(byteOffset, byteOffset + byteLength);
+};
