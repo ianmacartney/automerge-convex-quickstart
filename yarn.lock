@@ -71,7 +71,7 @@
 
 "@automerge/automerge@^2.2.5":
   version "2.2.8"
-  resolved "https://registry.npmjs.org/@automerge/automerge/-/automerge-2.2.8.tgz"
+  resolved "https://registry.yarnpkg.com/@automerge/automerge/-/automerge-2.2.8.tgz#6e33f271b99a652751c1a53048df2a2b2a80dcc2"
   integrity sha512-kP6Z9lIkNeIGe/jhF8SUQAgUMwVjtXCBL0eZEgQGCoWvPNTPcg8fnQco28XkYBrfkkuqiEUAbdHhJmSp0y79ug==
   dependencies:
     uuid "^9.0.0"
