@@ -1,28 +1,17 @@
 import {
-  NetworkAdapter,
-  StorageId,
+  DocumentId,
+  type EphemeralMessage,
   type Message,
+  NetworkAdapter,
   type PeerId,
   type PeerMetadata,
-  // cbor,
+  StorageId,
+  type SyncMessage,
 } from "@automerge/automerge-repo";
-import { api } from "../convex/_generated/api";
-// TODO: what's this?
-// } from "@automerge/automerge-repo/slim"
-
-import {
-  FromClientMessage,
-  FromServerMessage,
-  JoinMessage,
-  ProtocolV1,
-} from "@automerge/automerge-repo-network-websocket";
-import { ConvexClient } from "convex/browser";
+import * as A from "@automerge/automerge/next";
 import { ConvexReactClient, Watch } from "convex/react";
-
-export const toArrayBuffer = (bytes: Uint8Array) => {
-  const { buffer, byteOffset, byteLength } = bytes;
-  return buffer.slice(byteOffset, byteOffset + byteLength);
-};
+import { api } from "../convex/_generated/api";
+import { mergeArrays } from "@automerge/automerge-repo/helpers/mergeArrays.js";
 
 /**
  *
@@ -43,113 +32,74 @@ export class ConvexNetworkAdapter extends NetworkAdapter {
   #readyPromise: Promise<void> = new Promise<void>((resolve) => {
     this.#readyResolver = resolve;
   });
-  #version: number;
+  // Necessary?
   isReady() {
     // return true;
     return this.#ready;
   }
 
+  // Necessary?
   whenReady() {
     // return Promise.resolve();
     return this.#readyPromise;
   }
 
-  #forceReady() {
-    if (!this.#ready) {
-      this.#ready = true;
-      this.#readyResolver!();
-      this.emit("ready", {
-        network: this,
-      });
-      this.emit("peer-candidate", {
-        peerId: "convex" as PeerId,
-        peerMetadata: {
-          isEphemeral: false,
-        },
-      });
-    }
-  }
+  #subscriptions: {
+    [key: DocumentId]: { watch: Watch<A.Heads>; unsubscribe: () => void };
+  } = {};
 
   constructor(options?: ConvexNetworkAdapterOptions) {
     console.debug("ConvexNetworkAdapter constructor");
     super();
     // TODO: eventually wait for connection?
+
     this.#client =
       options?.convex ??
       new ConvexReactClient("https://mellow-anaconda-653.convex.cloud");
-    this.#version = 0;
   }
 
+  // Necessary?
+  remoteIds?: { peerId: PeerId; storageId: StorageId };
   connect(peerId: PeerId, peerMetadata?: PeerMetadata) {
-    console.debug("ConvexNetworkAdapter connect", peerId, peerMetadata);
     this.peerId = peerId;
     this.peerMetadata = peerMetadata;
-
-    const watch = this.#client.watchQuery(api.automerge.version, {});
-    // TODO: do we need to handle unsubscribe?
-    watch.onUpdate(() => {
-      const version = watch.localQueryResult();
-      if (version !== undefined) {
-        this.#sync(version);
+    console.debug("ConvexNetworkAdapter connect", peerId, peerMetadata);
+    this.peerMetadata = peerMetadata;
+    const watch = this.#client.watchQuery(api.automerge.ids, {});
+    const localIds = watch.localQueryResult();
+    const handleIds = (ids: { peerId: PeerId; storageId: StorageId }) => {
+      if (!this.#ready) {
+        this.#ready = true;
+        this.#readyResolver!();
+        this.emit("ready", {
+          network: this,
+        });
       }
-    });
-    // In case there's already a subscription elsewhere
-    const version = watch.localQueryResult();
-    if (version !== undefined) {
-      this.#sync(version);
-    }
-    // TODO: when do we emit peer-disconnected?
-    // this.emit("peer-disconnected", { peerId: senderId });
-
-    // do anything on init?
-  }
-
-  #sync(version: number) {
-    this.#forceReady();
-    if (version <= this.#version) {
-      console.debug("ignoring sync", version, this.#version);
-    }
-    const peerId = this.peerId;
-    if (!peerId) {
-      throw new Error("Peer ID not set");
-    }
-    console.debug("sync", version, this.#version);
-    this.#client
-      .query(api.automerge.pull, {
-        after: this.#version,
-      })
-      .then((results) => {
-        if (results.length === 0) {
-          throw new Error(
-            `No results from pull on version mismatch: ${this.#version} -> ${version}`
-          );
+      if (!this.remoteIds || this.remoteIds.peerId !== ids.peerId) {
+        if (this.remoteIds) {
+          this.emit("peer-disconnected", { peerId: this.remoteIds.peerId });
         }
-        console.debug("pulled", results);
-        for (const result of results) {
-          if (result.message.senderId === peerId) {
-            console.debug("ignoring message from self", result.version);
-            continue;
-          }
-          if (result.version < this.#version) {
-            continue;
-          }
-          console.debug("message", result.message);
-          const message = result.message;
-          const data = message.data ? new Uint8Array(message.data) : undefined;
-          this.emit("message", {
-            documentId: message.documentId,
-            senderId: message.senderId, // convex
-            targetId: peerId,
-            type: message.type,
-            data,
-          });
+        this.remoteIds = ids;
+        this.emit("peer-candidate", {
+          peerId: ids.peerId,
+          peerMetadata: { isEphemeral: false, storageId: ids.storageId },
+        });
+      }
+    };
+    if (localIds) {
+      handleIds(localIds);
+    } else {
+      const unsubscribe = watch.onUpdate(() => {
+        const ids = watch.localQueryResult();
+        if (ids) {
+          handleIds(ids);
+          unsubscribe();
         }
-        this.#version = results[results.length - 1].version;
       });
+    }
   }
 
-  remotePeerId?: PeerId;
-
+  // Necessary?
   peerCandidate(remotePeerId: PeerId, peerMetadata: PeerMetadata) {
     console.debug(
       "ConvexNetworkAdapter peerCandidate",
@@ -159,39 +109,267 @@ export class ConvexNetworkAdapter extends NetworkAdapter {
     if (!this.#client) {
       throw new Error("Client not connected");
     }
-    this.remotePeerId = remotePeerId;
-    this.emit("peer-candidate", {
+    if (!peerMetadata.storageId) {
+      throw new Error("Storage ID not set");
+    }
+    this.remoteIds = {
       peerId: remotePeerId,
-      peerMetadata,
-    });
+      storageId: peerMetadata.storageId,
+    };
   }
 
-  send(message: Message) {
+  send(message: RepoMessage) {
     console.debug("send", message);
-    // TODO: do we care about this?
-    if (!this.#client.connectionState().isWebSocketConnected) {
-      return false;
+    if (!isRepoMessage(message)) {
+      throw new Error("Invalid message type");
     }
-    // TODO: single flight
-    if ("data" in message) {
-      this.#client
-        .mutation(api.automerge.send, {
-          ...message,
-          data: message.data ? toArrayBuffer(message.data) : undefined,
-        })
-        .then((version) => {
-          if (version === this.#version + 1) {
-            this.#version = version;
-            console.debug("send success", version);
+    if (isRemoteSubscriptionControlMessage(message)) {
+      throw new Error("Remote subscription control messages not implemented");
+    }
+    const remoteIds = this.remoteIds;
+    if (!remoteIds) {
+      throw new Error("No remote peer ids set up yet");
+    }
+    const peerId = this.peerId;
+    if (!peerId) {
+      throw new Error("No peer id set up yet");
+    }
+    const documentId = message.documentId;
+    // Subscribe to the document
+    if (!this.#subscriptions[message.documentId]) {
+      const watch = this.#client.watchQuery(api.automerge.heads, {
+        documentId,
+      });
+      const onHeads = (heads: A.Heads | undefined) => {
+        if (!heads) {
+          return;
+        }
+        if (!remoteIds) {
+          throw new Error("No remote peer ids set up yet");
+        }
+        // TODO: not sure if we need to handle requests separately
+        // if (heads.length === 0) {
+        //   this.emit("message", {
+        //     documentId,
+        //     type: "request",
+        //     senderId: this.remoteIds.peerId,
+        //     targetId: this.peerId,
+        //     data: A.encodeSyncMessage({
+        //       changes: [],
+        //       have: [],
+        //       need
+
+        //      }),
+        //   } as RequestMessage);
+        // } else {
+        this.emit("message", {
+          documentId,
+          type: "remote-heads-changed",
+          senderId: remoteIds.peerId,
+          targetId: peerId,
+          newHeads: {
+            [remoteIds.storageId]: { heads, timestamp: Date.now() },
+          },
+        } as RemoteHeadsChanged);
+      };
+      onHeads(watch.localQueryResult());
+      const unsubscribe = watch.onUpdate(() =>
+        onHeads(watch.localQueryResult())
+      );
+      this.#subscriptions[message.documentId] = { watch, unsubscribe };
+    }
+    switch (message.type) {
+      case "sync":
+      case "request": {
+        // TODO: what if we're offline / it fails?
+        // TODO: single flight
+        const syncMsg = A.decodeSyncMessage(message.data);
+        console.debug("syncMsg", syncMsg);
+        // const handle = this.repo.find(message.documentId);
+        // const theirLatestHeads = this.#subscriptions[message.documentId]?.watch.localQueryResult();
+        // const theirLatestHeads = syncMsg
+        const sync = async () => {
+          if (syncMsg.changes.length > 0) {
+            await this.#client.mutation(api.automerge.submitChange, {
+              change: toArrayBuffer(mergeArrays(syncMsg.changes)),
+              documentId: message.documentId,
+            });
           }
-        });
-    } else {
-      this.#client.mutation(api.automerge.send, message);
+          if (syncMsg.need.length > 0) {
+            const change = await this.#client.query(api.automerge.getChange, {
+              documentId: message.documentId,
+              sinceHeads: syncMsg.heads,
+            });
+            if (change.change) {
+              this.emit("message", {
+                type: "sync",
+                senderId: remoteIds.peerId,
+                targetId: peerId,
+                documentId: message.documentId,
+                data: A.encodeSyncMessage({
+                  changes: [new Uint8Array(change.change)],
+                  heads: change.heads,
+                  // Hoping these are fine to send empty
+                  have: [],
+                  need: [],
+                }),
+              } as SyncMessage);
+            }
+          } else {
+            const heads =
+              this.#subscriptions[message.documentId]?.watch.localQueryResult();
+            if (!heads) {
+              throw new Error("No heads found");
+            }
+            this.emit("message", {
+              type: "sync",
+              senderId: remoteIds.peerId,
+              targetId: peerId,
+              documentId: message.documentId,
+              data: A.encodeSyncMessage({
+                changes: [],
+                heads,
+                have: [],
+                need: [],
+              }),
+            } as SyncMessage);
+          }
+        };
+        sync().catch(console.error);
+
+        // Get deltas from Convex based on old heads
+        // Submit changes to Convex
+        // Emit a sync message with reply
+        break;
+      }
+      case "remote-heads-changed":
+      case "doc-unavailable":
+      case "ephemeral":
+        console.warn(`sending ${message.type} not implemented`);
+        break;
     }
   }
 
   disconnect() {
     console.debug("disconnect");
-    return this.#client.close().catch(console.error);
+    return this.#client
+      .close()
+      .then(() => {
+        this.#ready = false;
+        this.#readyPromise = new Promise<void>((resolve) => {
+          this.#readyResolver = resolve;
+        });
+        if (this.remoteIds) {
+          this.emit("peer-disconnected", { peerId: this.remoteIds.peerId });
+        }
+        this.emit("close");
+      })
+      .catch(console.error);
   }
 }
+
+// Included since they aren't exported from @automerge/automerge-repo
+
+/**
+ * Sent by a {@link Repo} to indicate that it does not have the document and none of its connected
+ * peers do either.
+ */
+export type DocumentUnavailableMessage = {
+  type: "doc-unavailable";
+  senderId: PeerId;
+  targetId: PeerId;
+
+  /** The document which the peer claims it doesn't have */
+  documentId: DocumentId;
+};
+
+/**
+ * Sent by a {@link Repo} to request a document from a peer.
+ *
+ * @remarks
+ * This is identical to a {@link SyncMessage} except that it is sent by a {@link Repo}
+ * as the initial sync message when asking the other peer if it has the document.
+ * */
+export type RequestMessage = {
+  type: "request";
+  senderId: PeerId;
+  targetId: PeerId;
+
+  /** The automerge sync message */
+  data: Uint8Array;
+
+  /** The document ID of the document this message is for */
+  documentId: DocumentId;
+};
+
+/**
+ * Sent by a {@link Repo} to add or remove storage IDs from a remote peer's subscription.
+ */
+export type RemoteSubscriptionControlMessage = {
+  type: "remote-subscription-change";
+  senderId: PeerId;
+  targetId: PeerId;
+
+  /** The storage IDs to add to the subscription */
+  add?: StorageId[];
+
+  /** The storage IDs to remove from the subscription */
+  remove?: StorageId[];
+};
+
+/**
+ * Sent by a {@link Repo} to indicate that the heads of a document have changed on a remote peer.
+ */
+export type RemoteHeadsChanged = {
+  type: "remote-heads-changed";
+  senderId: PeerId;
+  targetId: PeerId;
+
+  /** The document ID of the document that has changed */
+  documentId: DocumentId;
+
+  /** The document's new heads */
+  newHeads: { [key: StorageId]: { heads: string[]; timestamp: number } };
+};
+
+/** These are message types that a {@link NetworkAdapter} surfaces to a {@link Repo}. */
+export type RepoMessage =
+  | SyncMessage
+  | EphemeralMessage
+  | RequestMessage
+  | DocumentUnavailableMessage
+  | RemoteSubscriptionControlMessage
+  | RemoteHeadsChanged;
+
+export const isRepoMessage = (message: Message): message is RepoMessage =>
+  isSyncMessage(message) ||
+  isEphemeralMessage(message) ||
+  isRequestMessage(message) ||
+  isDocumentUnavailableMessage(message) ||
+  isRemoteSubscriptionControlMessage(message) ||
+  isRemoteHeadsChanged(message);
+
+// prettier-ignore
+export const isDocumentUnavailableMessage = (msg: Message): msg is DocumentUnavailableMessage =>
+  msg.type === "doc-unavailable"
+
+export const isRequestMessage = (msg: Message): msg is RequestMessage =>
+  msg.type === "request";
+
+export const isSyncMessage = (msg: Message): msg is SyncMessage =>
+  msg.type === "sync";
+
+export const isEphemeralMessage = (msg: Message): msg is EphemeralMessage =>
+  msg.type === "ephemeral";
+
+// prettier-ignore
+export const isRemoteSubscriptionControlMessage = (msg: Message): msg is RemoteSubscriptionControlMessage =>
+  msg.type === "remote-subscription-change"
+
+export const isRemoteHeadsChanged = (msg: Message): msg is RemoteHeadsChanged =>
+  msg.type === "remote-heads-changed";
+
+export const toArrayBuffer = (bytes: Uint8Array) => {
+  const { buffer, byteOffset, byteLength } = bytes;
+  return buffer.slice(byteOffset, byteOffset + byteLength);
+};

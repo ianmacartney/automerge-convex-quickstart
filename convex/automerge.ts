@@ -96,6 +96,13 @@ export const getChange = query({
   handler: async (ctx, args) => {
     const doc = await loadDoc(ctx, args.documentId);
     const A = await automergeLoaded();
+    const heads = A.getHeads(doc);
+    if (A.getMissingDeps(doc, args.sinceHeads).length === 0) {
+      return {
+        change: null,
+        heads,
+      };
+    }
     const change = A.saveSince(doc, args.sinceHeads);
     return {
       change: toArrayBuffer(change),
@@ -239,7 +246,7 @@ export const testToggle = mutation({
       documentId: args.documentId,
       sinceHeads: sinceHeads,
     });
-    const change3 = new Uint8Array(delta.change);
+    const change3 = new Uint8Array(delta.change!);
     if (change3.length !== change.length) throw new Error("length mismatch");
     if (!change3.every((c, i) => c === change[i]))
       throw new Error(
