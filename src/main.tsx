@@ -1,6 +1,6 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
-import App, { type TaskList } from "./App.tsx";
+import App from "./App.tsx";
 
 import "./index.css";
 import { isValidAutomergeUrl, Repo } from "@automerge/automerge-repo";
@@ -8,6 +8,7 @@ import { isValidAutomergeUrl, Repo } from "@automerge/automerge-repo";
 import { IndexedDBStorageAdapter } from "@automerge/automerge-repo-storage-indexeddb";
 // import { BroadcastChannelNetworkAdapter } from "@automerge/automerge-repo-network-broadcastchannel";
 import { RepoContext } from "@automerge/automerge-repo-react-hooks";
+import { TaskList } from "../convex/types.ts";
 // import { ConvexNetworkAdapter } from "./ConvexNetworkAdapter.ts";
 
 const repo = new Repo({
