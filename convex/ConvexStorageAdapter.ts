@@ -30,6 +30,7 @@ export class ConvexStorageAdapter implements StorageAdapterInterface {
     public storageId: StorageId = process.env.CONVEX_CLOUD_URL as StorageId
   ) {}
   keyQuery(key: StorageKey, prefix: boolean = false) {
+    console.debug("keyQuery", key, prefix);
     if (key.length > 3) {
       throw new Error("Invalid key length");
     }
@@ -50,6 +51,7 @@ export class ConvexStorageAdapter implements StorageAdapterInterface {
   }
   /** Load the single value corresponding to `key` */
   async load(key: StorageKey): Promise<Uint8Array | undefined> {
+    console.debug("load", key);
     if (key.length === 1 && key[0] === "storage-adapter-id") {
       // We use the storageId
       return new TextEncoder().encode(this.storageId);
@@ -61,6 +63,7 @@ export class ConvexStorageAdapter implements StorageAdapterInterface {
 
   /** Save the value `data` to the key `key` */
   async save(key: StorageKey, data: Uint8Array): Promise<void> {
+    console.debug("save", key);
     if (key.length === 1 && key[0] === "storage-adapter-id") {
       return;
     }
@@ -93,6 +96,7 @@ export class ConvexStorageAdapter implements StorageAdapterInterface {
 
   /** Remove the value corresponding to `key` */
   async remove(key: StorageKey): Promise<void> {
+    console.debug("remove", key);
     const existing = await this.keyQuery(key).unique();
     if (!isDatabaseWriter(this.ctx.db)) {
       throw new Error("Trying to delete from a query!");
@@ -114,6 +118,7 @@ export class ConvexStorageAdapter implements StorageAdapterInterface {
    * aren't using this yet but keep it in mind.)
    */
   async loadRange(keyPrefix: StorageKey): Promise<Chunk[]> {
+    console.debug("loadRange", keyPrefix);
     const docs = await this.keyQuery(keyPrefix, true).collect();
     return docs.map((doc) => ({
       key: [doc.documentId, doc.type, doc.hash],
@@ -123,6 +128,7 @@ export class ConvexStorageAdapter implements StorageAdapterInterface {
 
   /** Remove all values with keys that start with `keyPrefix` */
   async removeRange(keyPrefix: StorageKey): Promise<void> {
+    console.debug("removeRange", keyPrefix);
     const docs = await this.keyQuery(keyPrefix, true).collect();
     if (!isDatabaseWriter(this.ctx.db)) {
       throw new Error("Trying to delete from a query!");
