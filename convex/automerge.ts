@@ -273,7 +273,7 @@ export function keyHash(binary: Uint8Array) {
   );
 }
 
-export function headsHash(heads: A.Heads): string {
+export function headsHash(heads: Automerge.Heads): string {
   const encoder = new TextEncoder();
   const headsbinary = mergeArrays(heads.map((h: string) => encoder.encode(h)));
   return keyHash(headsbinary);
