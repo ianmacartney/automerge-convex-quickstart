@@ -164,22 +164,14 @@ export const heads = query({
   },
 });
 
-export const load = query({
+export const deleteDoc = internalMutation({
   args: { documentId: vDocumentId },
   handler: async (ctx, args) => {
-    const doc = await loadDoc(ctx, args.documentId);
-    const conflicts = A.getConflicts<TaskList>(doc, "tasks.0.done");
-    return { doc, conflicts };
-
-    // const repo = await getRepo(ctx);
-    // const handle = repo.find<TaskList>(args.documentId);
-    // const changes = A.diff(
-    //   handle.docSync()!,
-    //   args.fromHeads,
-    //   A.getHeads(handle.docSync()!)
-    // );
-    // const incremental = A.loadIncremental(handle.docSync()!, changes);
-    // return A.applyChanges(handle.docSync()!, [incremental]);
+    const result = await ctx.db
+      .query("automerge")
+      .withIndex("doc_type_hash", (q) => q.eq("documentId", args.documentId))
+      .collect();
+    await Promise.all(result.map((r) => ctx.db.delete(r._id)));
   },
 });
 
