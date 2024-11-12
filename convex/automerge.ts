@@ -1,3 +1,16 @@
+import "./_patch";
+import * as A from "@automerge/automerge/slim/next";
+import {
+  DocHandle,
+  DocumentId,
+  PeerId,
+  Repo,
+
+} from "@automerge/automerge-repo/slim";
+// @ts-expect-error wasm is not a module
+import { automergeWasmBase64 } from "@automerge/automerge/automerge.wasm.base64.js";
+// import wasm from "@automerge/automerge/automerge.wasm?url";
+
 import { v } from "convex/values";
 import { api, internal } from "./_generated/api";
 import { Doc, Id } from "./_generated/dataModel";
@@ -11,10 +24,11 @@ import {
   query,
 } from "./_generated/server";
 import schema, { vDocumentId } from "./schema";
-import * as A from "@automerge/automerge/slim/next";
-import { DocHandle, PeerId, Repo } from "@automerge/automerge-repo";
-import { ConvexStorageAdapter } from "./ConvexStorageAdapter";
+import { ConvexStorageAdapter, toArrayBuffer } from "./ConvexStorageAdapter";
 import { TaskList } from "./types";
+
+console.time("initializeBase64Wasm");
+const wasm = A.initializeBase64Wasm(automergeWasmBase64);
 
 export const version = query({
   args: {},
@@ -83,6 +97,14 @@ export const create = mutation({
 export const testAdd = internalMutation({
   args: {},
   handler: async (ctx, args) => {
+    if (A.isWasmInitialized()) {
+      console.log("wasm already initialized");
+    } else {
+      await wasm;
+      await A.wasmInitialized();
+      console.timeEnd("initializeBase64Wasm");
+    }
+
     const repo = new Repo({
       network: [],
       storage: new ConvexStorageAdapter(ctx),

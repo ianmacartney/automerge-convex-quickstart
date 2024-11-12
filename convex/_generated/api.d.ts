@@ -14,6 +14,7 @@ import type {
   FunctionReference,
 } from "convex/server";
 import type * as ConvexStorageAdapter from "../ConvexStorageAdapter.js";
+import type * as _patch from "../_patch.js";
 import type * as automerge from "../automerge.js";
 import type * as types from "../types.js";
 
@@ -27,6 +28,7 @@ import type * as types from "../types.js";
  */
 declare const fullApi: ApiFromModules<{
   ConvexStorageAdapter: typeof ConvexStorageAdapter;
+  _patch: typeof _patch;
   automerge: typeof automerge;
   types: typeof types;
 }>;

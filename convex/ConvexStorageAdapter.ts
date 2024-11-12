@@ -4,7 +4,7 @@ import {
   PeerId,
   StorageAdapterInterface,
   StorageKey,
-} from "@automerge/automerge-repo";
+} from "@automerge/automerge-repo/slim";
 import { DatabaseReader, DatabaseWriter } from "./_generated/server";
 import { StorageId } from "convex/server";
 
