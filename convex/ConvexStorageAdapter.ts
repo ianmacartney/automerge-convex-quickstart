@@ -1,7 +1,6 @@
 import {
   Chunk,
   DocumentId,
-  PeerId,
   StorageAdapterInterface,
   StorageKey,
 } from "@automerge/automerge-repo/slim";
@@ -11,7 +10,9 @@ import { StorageId } from "convex/server";
 function parseKey(keyOrPrefix: StorageKey) {
   const [documentId, type, hash] = keyOrPrefix;
   if (!documentId) {
-    throw new Error(`A key must include a documentId: ${keyOrPrefix}`);
+    throw new Error(
+      `A key must include a documentId: ${keyOrPrefix.join(",")}`
+    );
   }
   if (type && type !== "incremental" && type !== "snapshot") {
     throw new Error("Unexpected type: " + type);
@@ -34,14 +35,14 @@ export class ConvexStorageAdapter implements StorageAdapterInterface {
     }
     const [documentId, type, hash] = parseKey(key);
     return this.ctx.db.query("automerge").withIndex("doc_type_hash", (q) => {
-      const docQ = q.eq("documentId", documentId as DocumentId);
+      const docQ = q.eq("documentId", documentId);
       if (!type) {
-        if (!prefix) throw new Error(`Key missing type: ${key}`);
+        if (!prefix) throw new Error(`Key missing type: ${key.join(",")}`);
         return docQ;
       }
       const typeQ = docQ.eq("type", type);
       if (!hash) {
-        if (!prefix) throw new Error(`Key missing hash: ${prefix}`);
+        if (!prefix) throw new Error(`Key missing hash: ${key.join(",")}`);
         return typeQ;
       }
       return typeQ.eq("hash", hash);
@@ -79,7 +80,7 @@ export class ConvexStorageAdapter implements StorageAdapterInterface {
     } else {
       const [documentId, type, hash] = parseKey(key);
       if (!type || !hash) {
-        throw new Error(`Key missing type/hash: ${key}`);
+        throw new Error(`Key missing type/hash: ${key.join(",")}`);
       }
       await this.ctx.db.insert("automerge", {
         documentId,
