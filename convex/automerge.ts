@@ -47,10 +47,11 @@ export const upsert = mutation({
   args: {
     documentId: vDocumentId,
     data: v.bytes(),
-    hash: v.string(),
   },
   handler: async (ctx, args) => {
     const A = await loadAutomerge();
+    const newDoc = A.load(new Uint8Array(args.data));
+    const hash = headsHash(A.getHeads(newDoc));
     const existing = await ctx.db
       .query("automerge")
       .withIndex("doc_type_hash", (q) => q.eq("documentId", args.documentId))
@@ -58,7 +59,6 @@ export const upsert = mutation({
     if (existing) {
       // Check that the data is the same
       const oldDoc = await loadDoc(ctx, args.documentId);
-      const newDoc = A.load(new Uint8Array(args.data));
       if (headsAreSame(A.getHeads(oldDoc), A.getHeads(newDoc))) {
         // No changes
         return;
@@ -66,15 +66,14 @@ export const upsert = mutation({
       const data = A.saveSince(newDoc, A.getHeads(oldDoc));
       await ctx.runMutation(api.automerge.change, {
         documentId: args.documentId,
-        data: toArrayBuffer(data),
-        hash: keyHash(data),
+        change: toArrayBuffer(data),
       });
       return;
     }
     await ctx.db.insert("automerge", {
       documentId: args.documentId,
       data: args.data,
-      hash: args.hash,
+      hash,
       type: "snapshot",
     });
   },
@@ -83,18 +82,13 @@ export const upsert = mutation({
 export const change = mutation({
   args: {
     documentId: vDocumentId,
-    data: v.bytes(),
-    hash: v.string(),
+    change: v.bytes(),
   },
   handler: async (ctx, args) => {
-    const hash = keyHash(new Uint8Array(args.data));
-    if (hash !== args.hash) {
-      throw new Error("Hash mismatch");
-    }
     await ctx.db.insert("automerge", {
       documentId: args.documentId,
-      data: args.data,
-      hash: args.hash,
+      data: args.change,
+      hash: keyHash(new Uint8Array(args.change)),
       type: "incremental",
     });
   },
@@ -196,14 +190,13 @@ export const testAdd = internalMutation({
     const orig = await loadDoc(ctx, documentId);
     const A = await loadAutomerge();
     const doc = A.change(orig, (doc) => {
-      doc.tasks[0].done = true;
+      doc.tasks[0].title = "test2";
     });
     // const doc = A.from({ tasks: [{ title: "test", done: true }] });
     const binary = A.save(doc);
     await ctx.runMutation(api.automerge.upsert, {
       documentId,
       data: toArrayBuffer(binary),
-      hash: headsHash(A.getHeads(doc)),
     });
 
     // const documentId = "automerge:eNEmGYHnwmXkhiWVuzT6CNQvKYa" as DocumentId;
@@ -243,8 +236,7 @@ export const testToggle = mutation({
       throw new Error("content mismatch");
     await ctx.runMutation(api.automerge.change, {
       documentId: args.documentId,
-      data: toArrayBuffer(change),
-      hash: keyHash(change),
+      change: toArrayBuffer(change),
     });
     const delta = await ctx.runQuery(api.automerge.getDelta, {
       documentId: args.documentId,
