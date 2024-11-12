@@ -64,7 +64,7 @@ export const upsert = mutation({
         return;
       }
       const data = A.saveSince(newDoc, A.getHeads(oldDoc));
-      await ctx.runMutation(api.automerge.change, {
+      await ctx.runMutation(api.automerge.submitChange, {
         documentId: args.documentId,
         change: toArrayBuffer(data),
       });
@@ -79,7 +79,7 @@ export const upsert = mutation({
   },
 });
 
-export const change = mutation({
+export const submitChange = mutation({
   args: {
     documentId: vDocumentId,
     change: v.bytes(),
@@ -234,7 +234,7 @@ export const testToggle = mutation({
     if (change.length !== change2.length) throw new Error("length mismatch");
     if (!change.every((c, i) => c === change2[i]))
       throw new Error("content mismatch");
-    await ctx.runMutation(api.automerge.change, {
+    await ctx.runMutation(api.automerge.submitChange, {
       documentId: args.documentId,
       change: toArrayBuffer(change),
     });
