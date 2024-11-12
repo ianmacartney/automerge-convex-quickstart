@@ -68,9 +68,14 @@ export class ConvexStorageAdapter implements StorageAdapterInterface {
       throw new Error("Trying to save from a query!");
     }
     if (existing) {
-      await this.ctx.db.patch(existing._id, {
-        data: toArrayBuffer(data),
-      });
+      // Throw if the data is not the same
+      const existingData = new Uint8Array(existing.data);
+      if (existingData.byteLength !== data.byteLength) {
+        throw new Error("Data length mismatch");
+      }
+      if (!existingData.every((b, i) => b === data[i])) {
+        throw new Error("Data mismatch!");
+      }
     } else {
       const [documentId, type, hash] = parseKey(key);
       if (!type || !hash) {
