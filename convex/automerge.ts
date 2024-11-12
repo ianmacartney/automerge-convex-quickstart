@@ -43,7 +43,7 @@ async function loadAutomerge() {
  * Incremental changes version
  */
 
-export const upsert = mutation({
+export const submitSnapshot = mutation({
   args: {
     documentId: vDocumentId,
     data: v.bytes(),
@@ -54,28 +54,21 @@ export const upsert = mutation({
     const hash = headsHash(A.getHeads(newDoc));
     const existing = await ctx.db
       .query("automerge")
-      .withIndex("doc_type_hash", (q) => q.eq("documentId", args.documentId))
+      .withIndex("doc_type_hash", (q) =>
+        q
+          .eq("documentId", args.documentId)
+          .eq("type", "snapshot")
+          .eq("hash", hash)
+      )
       .first();
-    if (existing) {
-      // Check that the data is the same
-      const oldDoc = await loadDoc(ctx, args.documentId);
-      if (headsAreSame(A.getHeads(oldDoc), A.getHeads(newDoc))) {
-        // No changes
-        return;
-      }
-      const data = A.saveSince(newDoc, A.getHeads(oldDoc));
-      await ctx.runMutation(api.automerge.submitChange, {
+    if (!existing) {
+      await ctx.db.insert("automerge", {
         documentId: args.documentId,
-        change: toArrayBuffer(data),
+        data: args.data,
+        hash,
+        type: "snapshot",
       });
-      return;
     }
-    await ctx.db.insert("automerge", {
-      documentId: args.documentId,
-      data: args.data,
-      hash,
-      type: "snapshot",
-    });
   },
 });
 
@@ -189,12 +182,17 @@ export const testAdd = internalMutation({
     const documentId = "eNEmGYHnwmXkhiWVuzT6CNQvKYa" as DocumentId;
     const orig = await loadDoc(ctx, documentId);
     const A = await loadAutomerge();
+    // To update and submit a new snapshot:
     const doc = A.change(orig, (doc) => {
       doc.tasks[0].title = "test2";
     });
+    // To make a new head:
+    // const doc = A.from({
+    //   tasks: [{ title: "test", done: true }],
+    // });
     // const doc = A.from({ tasks: [{ title: "test", done: true }] });
     const binary = A.save(doc);
-    await ctx.runMutation(api.automerge.upsert, {
+    await ctx.runMutation(api.automerge.submitSnapshot, {
       documentId,
       data: toArrayBuffer(binary),
     });
