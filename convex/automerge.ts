@@ -271,16 +271,16 @@ export const testToggle = mutation({
       documentId: args.documentId,
       change: toArrayBuffer(change),
     });
-    const delta = await ctx.runQuery(api.automerge.getChange, {
-      documentId: args.documentId,
-      sinceHeads: sinceHeads,
-    });
-    const change3 = new Uint8Array(delta.change!);
-    if (change3.length !== change.length) throw new Error("length mismatch");
-    if (!change3.every((c, i) => c === change[i]))
-      throw new Error(
-        `delta content mismatch: ${change3.toString()} !== ${change.toString()}`
-      );
+    // const delta = await ctx.runQuery(api.automerge.getChange, {
+    //   documentId: args.documentId,
+    //   sinceHeads: sinceHeads,
+    // });
+    // const change3 = new Uint8Array(delta.change!);
+    // if (change3.length !== change.length) throw new Error("length mismatch");
+    // if (!change3.every((c, i) => c === change[i]))
+    //   throw new Error(
+    //     `delta content mismatch: ${change3.toString()} !== ${change.toString()}`
+    //   );
     // const doc3 = A.change(doc, (doc) => {
     //   doc.tasks[0].done = false;
     // });

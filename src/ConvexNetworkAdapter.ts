@@ -71,6 +71,7 @@ export class ConvexNetworkAdapter extends NetworkAdapter {
     const watch = this.#client.watchQuery(api.automerge.ids, {});
     const localIds = watch.localQueryResult();
     const handleIds = (ids: { peerId: PeerId; storageId: StorageId }) => {
+      console.debug("handleIds", ids);
       if (!this.#ready) {
         this.#ready = true;
         this.#readyResolver!();
@@ -121,6 +122,7 @@ export class ConvexNetworkAdapter extends NetworkAdapter {
     };
   }
 
+  #syncing = false;
   send(message: RepoMessage) {
     console.debug("send", message);
     if (!isRepoMessage(message)) {
@@ -140,15 +142,19 @@ export class ConvexNetworkAdapter extends NetworkAdapter {
     const documentId = message.documentId;
     // Subscribe to the document
     if (!this.#subscriptions[message.documentId]) {
+      console.debug("subscribe", documentId);
       const watch = this.#client.watchQuery(api.automerge.heads, {
         documentId,
       });
       const onHeads = (heads: A.Heads | undefined) => {
         if (!heads) {
+          console.debug("onHeads empty", documentId);
           return;
         }
         if (!remoteIds) {
           throw new Error("No remote peer ids set up yet");
+        }
+        if (!this.#syncing) {
         }
         // TODO: not sure if we need to handle requests separately
         // if (heads.length === 0) {
@@ -165,6 +171,7 @@ export class ConvexNetworkAdapter extends NetworkAdapter {
         //      }),
         //   } as RequestMessage);
         // } else {
+        console.debug("remote-heads-changed", heads);
         this.emit("message", {
           documentId,
           type: "remote-heads-changed",
@@ -216,7 +223,7 @@ export class ConvexNetworkAdapter extends NetworkAdapter {
               senderId: remoteIds.peerId,
               targetId: peerId,
               data: new Uint8Array(msg.syncMessage),
-            });
+            } as SyncMessage);
           }
           // if (syncMsg.need.length > 0) {
           //   const change = await this.#client.query(api.automerge.getChange, {
