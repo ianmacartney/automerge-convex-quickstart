@@ -23,13 +23,18 @@ import { vDocumentId } from "./schema";
 import { TaskList } from "./types";
 import { mergeArrays } from "@automerge/automerge-repo/helpers/mergeArrays.js";
 
-console.time("initializeBase64Wasm");
-const loaded = Automerge.initializeBase64Wasm(
-  automergeWasmBase64 as string
-).then(() => console.timeEnd("initializeBase64Wasm"));
+function load() {
+  console.time("initializeBase64Wasm");
+  return Automerge.initializeBase64Wasm(automergeWasmBase64 as string).then(
+    () => {
+      console.timeEnd("initializeBase64Wasm");
+      return Automerge;
+    }
+  );
+}
 
 async function automergeLoaded() {
-  await loaded;
+  await Automerge.wasmInitialized();
   return Automerge;
 }
 
@@ -51,11 +56,13 @@ export const submitSnapshot = mutation({
   args: {
     documentId: vDocumentId,
     data: v.bytes(),
+    // hash: v.string(),
   },
   handler: async (ctx, args) => {
-    const A = await automergeLoaded();
-    const newDoc = A.load(new Uint8Array(args.data));
-    const hash = headsHash(A.getHeads(newDoc));
+    // const A = await load();
+    // const newDoc = A.load(new Uint8Array(args.data));
+    // const hash = headsHash(A.getHeads(newDoc));
+    const hash = keyHash(new Uint8Array(args.data));
     const existing = await ctx.db
       .query("automerge")
       .withIndex("doc_type_hash", (q) =>
@@ -98,6 +105,7 @@ export const submitChange = mutation({
 export const getChange = query({
   args: { documentId: vDocumentId, sinceHeads: v.array(v.string()) },
   handler: async (ctx, args) => {
+    void load();
     const doc = await loadDoc(ctx, args.documentId);
     const A = await automergeLoaded();
     const heads = A.getHeads(doc);
@@ -130,6 +138,7 @@ export const doc = query({
 export const compact = mutation({
   args: { documentId: vDocumentId },
   handler: async (ctx, args) => {
+    void load();
     const result = await ctx.db
       .query("automerge")
       .withIndex("doc_type_hash", (q) => q.eq("documentId", args.documentId))
@@ -165,6 +174,7 @@ async function loadDoc(ctx: { db: DatabaseReader }, documentId: DocumentId) {
 export const heads = query({
   args: { documentId: vDocumentId },
   handler: async (ctx, args) => {
+    void load();
     const doc = await loadDoc(ctx, args.documentId);
     const A = await automergeLoaded();
     return A.getHeads(doc);
@@ -177,6 +187,7 @@ export const heads = query({
 export const syncQuery = query({
   args: { documentId: vDocumentId, data: v.bytes(), state: v.bytes() },
   handler: async (ctx, args) => {
+    void load();
     const doc = await loadDoc(ctx, args.documentId);
     const A = await automergeLoaded();
     const state = A.decodeSyncState(new Uint8Array(args.state));
@@ -212,6 +223,8 @@ export const testAdd = internalMutation({
   handler: async (ctx) => {
     if (Automerge.isWasmInitialized()) {
       console.log("wasm already initialized");
+    } else {
+      void load();
     }
     // const doc = A.load<TaskList>();
     const documentId = "eNEmGYHnwmXkhiWVuzT6CNQvKYa" as DocumentId;
@@ -248,6 +261,7 @@ export const testAdd = internalMutation({
 export const testToggle = mutation({
   args: { documentId: vDocumentId },
   handler: async (ctx, args) => {
+    void load();
     const result = await ctx.db
       .query("automerge")
       .withIndex("doc_type_hash", (q) => q.eq("documentId", args.documentId))
@@ -297,7 +311,7 @@ export const testToggle = mutation({
  */
 
 // Based on https://github.com/automerge/automerge-repo/blob/fixes/packages/automerge-repo/src/storage/keyHash.ts
-export function keyHash(binary: Uint8Array) {
+function keyHash(binary: Uint8Array) {
   // calculate hash
   const hash = sha256(binary);
   // To hex string
@@ -306,13 +320,13 @@ export function keyHash(binary: Uint8Array) {
   );
 }
 
-export function headsHash(heads: Automerge.Heads): string {
+function headsHash(heads: Automerge.Heads): string {
   const encoder = new TextEncoder();
   const headsbinary = mergeArrays(heads.map((h: string) => encoder.encode(h)));
   return keyHash(headsbinary);
 }
 
-export const toArrayBuffer = (bytes: Uint8Array) => {
+const toArrayBuffer = (bytes: Uint8Array) => {
   const { buffer, byteOffset, byteLength } = bytes;
   return buffer.slice(byteOffset, byteOffset + byteLength);
 };
