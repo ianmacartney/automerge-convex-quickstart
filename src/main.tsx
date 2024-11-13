@@ -1,31 +1,35 @@
-import React from "react";
-import ReactDOM from "react-dom/client";
-import App from "./App.tsx";
-
 import { isValidAutomergeUrl, Repo } from "@automerge/automerge-repo";
-import { IndexedDBStorageAdapter } from "@automerge/automerge-repo-storage-indexeddb";
-import "./index.css";
 // import { BrowserWebSocketClientAdapter } from "@automerge/automerge-repo-network-websocket";
 // import { BroadcastChannelNetworkAdapter } from "@automerge/automerge-repo-network-broadcastchannel";
 import { RepoContext } from "@automerge/automerge-repo-react-hooks";
+import { IndexedDBStorageAdapter } from "@automerge/automerge-repo-storage-indexeddb";
+import React from "react";
+import ReactDOM from "react-dom/client";
+import App from "./App.tsx";
+import "./index.css";
 import {
   // ConvexProvider,
   ConvexReactClient,
 } from "convex/react";
 import { TaskList } from "../convex/types.ts";
-import { ConvexNetworkAdapter } from "./ConvexNetworkAdapter.ts";
+import { sync } from "./sync.ts";
 
-const convexUrl = import.meta.env.VITE_CONVEX_URL as string;
-const options = convexUrl
-  ? { convex: new ConvexReactClient(convexUrl) }
-  : undefined;
+// We fall back to a demo backend here
+const convexUrl =
+  (import.meta.env.VITE_CONVEX_URL as string) ??
+  "https://mellow-anaconda-653.convex.cloud";
+
 const repo = new Repo({
   // network: [new BrowserWebSocketClientAdapter("ws://sync.automerge.org")],
   // network: [new BroadcastChannelNetworkAdapter()],
-  // network: [],
-  network: [new ConvexNetworkAdapter(options)],
+  // network: [new ConvexNetworkAdapter(options)],
+  network: [],
   storage: new IndexedDBStorageAdapter(),
 });
+
+const convex = new ConvexReactClient(convexUrl);
+
+sync(repo, convex);
 
 const rootDocUrl = `${document.location.hash.substring(1)}`;
 let handle;

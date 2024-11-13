@@ -21,5 +21,7 @@ export default defineSchema({
     type: v.union(v.literal("incremental"), v.literal("snapshot")),
     hash: v.string(),
     data: v.bytes(),
-  }).index("doc_type_hash", ["documentId", "type", "hash"]),
+  })
+    .index("doc_type_hash", ["documentId", "type", "hash"])
+    .index("documentId", ["documentId"]),
 });

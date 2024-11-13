@@ -73,13 +73,14 @@ export const submitSnapshot = mutation({
       )
       .first();
     if (!existing) {
-      await ctx.db.insert("automerge", {
+      return ctx.db.insert("automerge", {
         documentId: args.documentId,
         data: args.data,
         hash,
         type: "snapshot",
       });
     }
+    return existing._id;
   },
 });
 
@@ -89,12 +90,38 @@ export const submitChange = mutation({
     change: v.bytes(),
   },
   handler: async (ctx, args) => {
-    await ctx.db.insert("automerge", {
+    return ctx.db.insert("automerge", {
       documentId: args.documentId,
       data: args.change,
       hash: keyHash(new Uint8Array(args.change)),
       type: "incremental",
     });
+  },
+});
+
+const MINUTE = 60 * 1000;
+const RETENTION_BUFFER = 5 * MINUTE;
+
+export const pullChanges = query({
+  args: {
+    documentId: vDocumentId,
+    since: v.number(),
+    numItems: v.optional(v.number()),
+    cursor: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const result = await ctx.db
+      .query("automerge")
+      .withIndex("documentId", (q) =>
+        q
+          .eq("documentId", args.documentId)
+          .gt("_creationTime", args.since - RETENTION_BUFFER)
+      )
+      .paginate({
+        numItems: args.numItems ?? 10,
+        cursor: args.cursor ?? null,
+      });
+    return result;
   },
 });
 
