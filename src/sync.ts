@@ -63,6 +63,7 @@ class ConvexDocSync {
   ) {
     this.documentId = handle.documentId;
     const lastSeen = getLastSeen(handle.documentId);
+    console.debug("loading lastSeen", lastSeen);
     if (!lastSeen) {
       void this.#load(isNew).then(() => {
         this.#watch(this.lastSeen ?? 0);
@@ -72,20 +73,20 @@ class ConvexDocSync {
       this.#watch(lastSeen);
     }
     handle.on("change", (change) => {
-      console.log("on change", this.documentId, change);
+      console.log("on change", change);
       void this.handleChange(false);
     });
     handle.on("delete", () => {
-      console.log("handle delete", this.documentId);
+      console.log("handle delete");
     });
     handle.on("heads-changed", (heads) => {
-      console.log("handle heads-changed", this.documentId, heads);
+      console.log("handle heads-changed", heads);
     });
     handle.on("unavailable", () => {
-      console.log("handle unavailable", this.documentId);
+      console.log("handle unavailable");
     });
     handle.on("remote-heads", (remoteHeads) => {
-      console.log("handle remote-heads", this.documentId, remoteHeads);
+      console.log("handle remote-heads", remoteHeads);
     });
     void this.handleChange(isNew);
   }
@@ -138,12 +139,11 @@ class ConvexDocSync {
       } catch (error) {
         console.error(
           `pull failed - waiting for ${(backoff / 1000).toFixed(1)}s`,
-          this.documentId,
           error
         );
         await new Promise((resolve) => setTimeout(resolve, backoff));
         backoff *= 2;
-        console.log("pull retry", this.documentId);
+        console.log("pull retry");
       }
     }
   }
@@ -160,11 +160,12 @@ class ConvexDocSync {
       watch.onUpdate(() => {
         const results = watch.localQueryResult();
         if (!results) return;
-        console.debug("watch onUpdate", this.documentId, results.page.length, {
+        console.debug("watch onUpdate", results.page.length, {
           isDone: results.isDone,
         });
         if (!results.isDone && !startedNextPage) {
           startedNextPage = true;
+          console.debug("starting next page");
           this.#watch(since, results.continueCursor);
         }
 
@@ -186,13 +187,13 @@ class ConvexDocSync {
             case "incremental":
               console.debug(
                 "watch applyIncremental",
-                this.documentId,
-                result._id
+                result._id,
+                result._creationTime
               );
               changes.push(new Uint8Array(result.data));
               break;
             case "snapshot":
-              console.debug("watch applySnapshot", this.documentId, result._id);
+              console.debug("watch applySnapshot", result._id);
               this.handle.update((doc) =>
                 A.loadIncremental<TaskList>(doc, new Uint8Array(result.data))
               );
@@ -204,10 +205,12 @@ class ConvexDocSync {
           }
         }
         if (changes.length > 0) {
-          console.debug("watch applyChanges", this.documentId, changes.length);
+          console.debug("watch applyChanges", changes.length);
           this.handle.update((doc) => A.applyChanges(doc, changes)[0]);
         }
+        console.debug("watch updating lastSeen", latest, this.lastSeen);
         if (latest && (!this.lastSeen || latest > this.lastSeen)) {
+          console.debug("watch updating lastSeen", latest);
           this.lastSeen = latest;
           const newDoc = this.handle.docSync();
           if (newDoc && A.getMissingDeps(newDoc, headsBefore).length !== 0) {
@@ -227,14 +230,14 @@ class ConvexDocSync {
     this.repo
       .flush([this.documentId])
       .then(() => {
-        console.debug("flushed & saving lastSeen", this.documentId, lastSeen);
+        console.debug("flushed & saving lastSeen", lastSeen);
         localStorage.setItem(
           `lastSeen-${this.documentId}`,
           lastSeen.toString()
         );
       })
       .catch((error) => {
-        console.error("flush failed", this.documentId, error);
+        console.error("flush failed", error);
       });
   }
 
@@ -258,7 +261,7 @@ class ConvexDocSync {
   #handling = false;
   async handleChange(isNew: boolean): Promise<void> {
     if (this.#handling) {
-      console.debug("handleChange already in progress", this.documentId);
+      console.debug("handleChange already in progress");
       if (this.#pending) {
         return this.#pending.promise;
       }
@@ -298,7 +301,7 @@ class ConvexDocSync {
                 data: toArrayBuffer(A.save(doc)),
               }
             );
-            console.debug("submitSnapshot", this.documentId, id);
+            console.debug("submitSnapshot", id);
             this.appliedChanges.add(id);
           } else {
             const missingDeps = A.getMissingDeps(doc, this.lastSyncHeads);
