@@ -164,7 +164,7 @@ class ConvexDocSync {
         if (!doc) {
           throw new Error("doc is undefined in watch");
         }
-        // const headsBefore = A.getHeads(doc);
+        const headsBefore = A.getHeads(doc);
         const changes: Uint8Array[] = [];
         for (const result of results.page) {
           // TODO: Unfortunately we currently don't skip since the callback
@@ -198,17 +198,10 @@ class ConvexDocSync {
           console.debug("watch applyChanges", changes.length);
           this.handle.update((doc) => A.applyChanges(doc, changes)[0]);
         }
-        console.debug("watch updating lastSeen", latest, this.lastSeen);
         if (latest && (!this.lastSeen || latest > this.lastSeen)) {
-          console.debug("watch updating lastSeen", latest);
           this.lastSeen = latest;
-          const newDoc = this.handle.docSync();
-          if (
-            newDoc
-            // TODO: check if we have the change already
-            // This isn't working for some reason.
-            //  && A.getMissingDeps(newDoc, headsBefore).length !== 0
-          ) {
+          const headsAfter = A.getHeads(this.handle.docSync()!);
+          if (!headsEqual(headsBefore, headsAfter)) {
             console.debug("watch saving lastSeen", latest);
             this.#saveLastSeen(latest);
           }
@@ -288,32 +281,30 @@ class ConvexDocSync {
           if (!doc) {
             throw new Error("doc is ready but undefined");
           }
+          const heads = A.getHeads(doc);
+          const syncHeads = this.lastSyncHeads;
           // TODO: only upload if server doesn't have it..
-          if (isNew || !this.lastSyncHeads) {
+          if (isNew || !syncHeads) {
             // If we created it, upload it.
             const id = await this.convex.mutation(api.sync.submitSnapshot, {
               documentId: this.documentId,
               data: toArrayBuffer(A.save(doc)),
             });
-            console.debug("submitSnapshot", id);
+            console.debug("submitSnapshot", id, heads);
             this.appliedChanges.add(id);
+            this.lastSyncHeads = heads;
+          } else if (headsEqual(heads, syncHeads)) {
+            console.log("already in sync", syncHeads);
           } else {
-            const missingDeps = A.getMissingDeps(doc, this.lastSyncHeads);
-            // if (missingDeps.length === 0) {
-            //   // If we already have the change, skip it.
-            //   console.log("already have change", this.lastSyncHeads);
-            // } else {
-            console.log("submitChange", missingDeps);
-            const change = A.saveSince(doc, this.lastSyncHeads);
+            console.log("submitChange", syncHeads, heads);
+            const change = A.saveSince(doc, syncHeads);
             const id = await this.convex.mutation(api.sync.submitChange, {
               documentId: this.documentId,
               change: toArrayBuffer(change),
             });
             this.appliedChanges.add(id);
-            // }
+            this.lastSyncHeads = heads;
           }
-          console.debug("updating lastSyncHeads", A.getHeads(doc));
-          this.lastSyncHeads = A.getHeads(doc);
           break;
         }
       }
@@ -355,3 +346,9 @@ const toArrayBuffer = (bytes: Uint8Array) => {
   const { buffer, byteOffset, byteLength } = bytes;
   return buffer.slice(byteOffset, byteOffset + byteLength);
 };
+
+function headsEqual(heads1: A.Heads, heads2: A.Heads) {
+  return (
+    heads1.length === heads2.length && heads1.every((h, i) => h === heads2[i])
+  );
+}
