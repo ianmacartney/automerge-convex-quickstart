@@ -183,7 +183,11 @@ class ConvexDocSync {
               changes.push(new Uint8Array(result.data));
               break;
             case "snapshot":
-              console.debug("watch applySnapshot", result._id);
+              console.debug(
+                "watch applySnapshot",
+                result._id,
+                result._creationTime
+              );
               this.handle.update((doc) =>
                 A.loadIncremental<TaskList>(doc, new Uint8Array(result.data))
               );
