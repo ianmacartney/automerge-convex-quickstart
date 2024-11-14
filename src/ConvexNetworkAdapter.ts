@@ -155,6 +155,7 @@ export class ConvexNetworkAdapter extends NetworkAdapter {
           throw new Error("No remote peer ids set up yet");
         }
         if (!this.#syncing) {
+          // TODO: handle requests separately
         }
         // TODO: not sure if we need to handle requests separately
         // if (heads.length === 0) {
