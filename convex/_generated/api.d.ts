@@ -13,10 +13,9 @@ import type {
   FilterApi,
   FunctionReference,
 } from "convex/server";
-import type * as ConvexStorageAdapter from "../ConvexStorageAdapter.js";
 import type * as _patch from "../_patch.js";
 import type * as automerge from "../automerge.js";
-import type * as repo from "../repo.js";
+import type * as sync from "../sync.js";
 import type * as types from "../types.js";
 
 /**
@@ -28,10 +27,9 @@ import type * as types from "../types.js";
  * ```
  */
 declare const fullApi: ApiFromModules<{
-  ConvexStorageAdapter: typeof ConvexStorageAdapter;
   _patch: typeof _patch;
   automerge: typeof automerge;
-  repo: typeof repo;
+  sync: typeof sync;
   types: typeof types;
 }>;
 export declare const api: FilterApi<

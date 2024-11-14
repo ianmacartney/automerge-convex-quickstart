@@ -23,7 +23,7 @@ function App({ docUrl }: { docUrl: AutomergeUrl }) {
         <a href="https://automerge.org" target="_blank">
           <img src={automergeLogo} className="logo" alt="Automerge logo" />
         </a>
-        <h1>Automerge Task List</h1>
+        <h1>Automerge + Convex Task List</h1>
       </header>
 
       <button type="button" onClick={addTask}>

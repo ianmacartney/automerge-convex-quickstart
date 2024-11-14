@@ -24,17 +24,8 @@ export function sync(repo: Repo, convex: ConvexReactClient) {
       );
     }
   });
-
-  repo.on("delete-document", ({ documentId }) => {
-    console.log("repo delete-document", documentId);
-  });
-
-  repo.on("unavailable-document", ({ documentId }) => {
-    console.log("repo unavailable-document", documentId);
-  });
 }
 
-// TODO: persist to local storage safely across tabs
 function getLastSeen(documentId: DocumentId) {
   const lastSeen = localStorage.getItem(`lastSeen-${documentId}`);
   if (!lastSeen) {
@@ -46,9 +37,8 @@ function getLastSeen(documentId: DocumentId) {
 class ConvexDocSync {
   // TODO: pull from local storage
   private lastSeen?: number;
-  private watches: Watch<
-    FunctionReturnType<typeof api.automerge.pullChanges>
-  >[] = [];
+  private watches: Watch<FunctionReturnType<typeof api.sync.pullChanges>>[] =
+    [];
   private unsubscribes: (() => void)[] = [];
   public documentId: DocumentId;
   private appliedChanges = new Set<Id<"automerge">>();
@@ -97,7 +87,7 @@ class ConvexDocSync {
     let backoff = 100;
     for (;;) {
       try {
-        const result = await this.convex.query(api.automerge.pullChanges, {
+        const result = await this.convex.query(api.sync.pullChanges, {
           documentId: this.documentId,
           since: 0,
           numItems: 1000,
@@ -149,7 +139,7 @@ class ConvexDocSync {
   }
 
   #watch(since: number, cursor?: string) {
-    const watch = this.convex.watchQuery(api.automerge.pullChanges, {
+    const watch = this.convex.watchQuery(api.sync.pullChanges, {
       documentId: this.documentId,
       since,
       cursor,
@@ -174,7 +164,7 @@ class ConvexDocSync {
         if (!doc) {
           throw new Error("doc is undefined in watch");
         }
-        const headsBefore = A.getHeads(doc);
+        // const headsBefore = A.getHeads(doc);
         const changes: Uint8Array[] = [];
         for (const result of results.page) {
           // TODO: Unfortunately we currently don't skip since the callback
@@ -213,7 +203,13 @@ class ConvexDocSync {
           console.debug("watch updating lastSeen", latest);
           this.lastSeen = latest;
           const newDoc = this.handle.docSync();
-          if (newDoc && A.getMissingDeps(newDoc, headsBefore).length !== 0) {
+          if (
+            newDoc
+            // TODO: check if we have the change already
+            // This isn't working for some reason.
+            //  && A.getMissingDeps(newDoc, headsBefore).length !== 0
+          ) {
+            console.debug("watch saving lastSeen", latest);
             this.#saveLastSeen(latest);
           }
         }
@@ -292,15 +288,13 @@ class ConvexDocSync {
           if (!doc) {
             throw new Error("doc is ready but undefined");
           }
+          // TODO: only upload if server doesn't have it..
           if (isNew || !this.lastSyncHeads) {
             // If we created it, upload it.
-            const id = await this.convex.mutation(
-              api.automerge.submitSnapshot,
-              {
-                documentId: this.documentId,
-                data: toArrayBuffer(A.save(doc)),
-              }
-            );
+            const id = await this.convex.mutation(api.sync.submitSnapshot, {
+              documentId: this.documentId,
+              data: toArrayBuffer(A.save(doc)),
+            });
             console.debug("submitSnapshot", id);
             this.appliedChanges.add(id);
           } else {
@@ -311,7 +305,7 @@ class ConvexDocSync {
             // } else {
             console.log("submitChange", missingDeps);
             const change = A.saveSince(doc, this.lastSyncHeads);
-            const id = await this.convex.mutation(api.automerge.submitChange, {
+            const id = await this.convex.mutation(api.sync.submitChange, {
               documentId: this.documentId,
               change: toArrayBuffer(change),
             });
