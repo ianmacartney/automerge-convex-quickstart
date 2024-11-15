@@ -107,7 +107,9 @@ class ConvexDocSync {
         if (changes.length > 0) {
           const doc = this.handle.docSync();
           if (doc) {
-            this.handle.update((doc) => A.applyChanges(doc, changes)[0]);
+            this.handle.update((doc) =>
+              A.loadIncremental<TaskList>(doc, mergeArrays(changes))
+            );
           } else {
             const newDoc = A.loadIncremental<TaskList>(
               A.init(),
@@ -200,7 +202,9 @@ class ConvexDocSync {
         }
         if (changes.length > 0) {
           console.debug("watch applyChanges", changes.length);
-          this.handle.update((doc) => A.applyChanges(doc, changes)[0]);
+          this.handle.update((doc) =>
+            A.loadIncremental<TaskList>(doc, mergeArrays(changes))
+          );
         }
         if (latest && (!this.lastSeen || latest > this.lastSeen)) {
           this.lastSeen = latest;
@@ -301,13 +305,16 @@ class ConvexDocSync {
             console.log("already in sync", syncHeads);
           } else {
             console.log("submitChange", syncHeads, heads);
-            const change = A.saveSince(doc, syncHeads);
+            const docBefore = A.view(doc, syncHeads);
+            const changes = A.getChanges(docBefore, doc);
+            console.debug("changes", changes.length);
             const id = await this.convex.mutation(api.sync.submitChange, {
               documentId: this.documentId,
-              change: toArrayBuffer(change),
+              change: toArrayBuffer(mergeArrays(changes)),
             });
             this.appliedChanges.add(id);
             this.lastSyncHeads = heads;
+            console.debug("submittedChange", id);
           }
           break;
         }
