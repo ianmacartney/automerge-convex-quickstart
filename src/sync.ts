@@ -67,18 +67,18 @@ class ConvexDocSync {
   ) {
     this.documentId = handle.documentId;
     const lastSeen = getLastSeen(handle.documentId);
-    console.debug("loading lastSeen", lastSeen);
-    if (!lastSeen) {
-      void this.#load(isNew).then(() => {
-        this.#watch(this.lastSeen ?? 0);
+    console.debug({ lastSeen });
+    if (!isNew && !lastSeen) {
+      void this.#load().then(() => {
+        void this.#startWatchingHandle();
       });
     } else {
-      this.lastSeen = lastSeen;
-      this.#watch(lastSeen);
+      this.lastSeen = lastSeen ?? 0;
+      void this.#startWatchingHandle();
     }
     handle.on("change", (change) => {
       console.log("on change", change);
-      void this.handleChange(false);
+      void this.handleChange();
     });
     handle.on("delete", () => {
       console.log("handle delete");
@@ -92,10 +92,14 @@ class ConvexDocSync {
     handle.on("remote-heads", (remoteHeads) => {
       console.log("handle remote-heads", remoteHeads);
     });
-    void this.handleChange(isNew);
   }
 
-  async #load(isNew: boolean) {
+  #startWatchingHandle() {
+    this.#watch(this.lastSeen ?? 0);
+    void this.handleChange();
+  }
+
+  async #load() {
     // TODO: load from server and create/update
     let cursor: string | undefined;
     let backoff = 100;
@@ -259,7 +263,7 @@ class ConvexDocSync {
     promise: Promise<void>;
   };
   #handling = false;
-  async handleChange(isNew: boolean): Promise<void> {
+  async handleChange(): Promise<void> {
     if (this.#handling) {
       console.debug("handleChange already in progress");
       if (this.#pending) {
@@ -295,7 +299,7 @@ class ConvexDocSync {
           const heads = A.getHeads(doc);
           const syncHeads = this.lastSyncHeads;
           // TODO: only upload if server doesn't have it..
-          if (isNew || !syncHeads) {
+          if (!syncHeads) {
             // If we created it, upload it.
             const id = await this.convex.mutation(api.sync.submitSnapshot, {
               documentId: this.documentId,
@@ -343,7 +347,7 @@ class ConvexDocSync {
     if (this.#pending) {
       const { resolve, reject } = this.#pending;
       this.#pending = undefined;
-      this.handleChange(false).then(resolve).catch(reject);
+      this.handleChange().then(resolve).catch(reject);
     }
   }
 }
