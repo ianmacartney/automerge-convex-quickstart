@@ -297,6 +297,10 @@ class ConvexDocSync {
             const id = await this.convex.mutation(api.sync.submitSnapshot, {
               documentId: this.documentId,
               data: toArrayBuffer(A.save(doc)),
+              debugDump: {
+                heads,
+                content: doc,
+              },
             });
             console.debug("submitSnapshot", id, heads);
             this.appliedChanges.add(id);
@@ -311,6 +315,10 @@ class ConvexDocSync {
             const id = await this.convex.mutation(api.sync.submitChange, {
               documentId: this.documentId,
               change: toArrayBuffer(mergeArrays(changes)),
+              debugDump: {
+                heads,
+                change: changes.map((c) => A.decodeChange(c)),
+              },
             });
             this.appliedChanges.add(id);
             this.lastSyncHeads = heads;

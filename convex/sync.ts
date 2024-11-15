@@ -10,7 +10,7 @@ export const submitSnapshot = mutation({
   args: {
     documentId: vDocumentId,
     data: v.bytes(),
-    // hash: v.string(),
+    debugDump: v.optional(v.any()),
   },
   handler: async (ctx, args) => {
     // const A = await load();
@@ -32,6 +32,8 @@ export const submitSnapshot = mutation({
         data: args.data,
         hash,
         type: "snapshot",
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+        debugDump: args.debugDump,
       });
     }
     return existing._id;
@@ -42,6 +44,7 @@ export const submitChange = mutation({
   args: {
     documentId: vDocumentId,
     change: v.bytes(),
+    debugDump: v.optional(v.any()),
   },
   handler: async (ctx, args) => {
     const hash = keyHash(new Uint8Array(args.change));
@@ -60,6 +63,8 @@ export const submitChange = mutation({
         data: args.change,
         hash,
         type: "incremental",
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+        debugDump: args.debugDump,
       });
     }
     return existing._id;
