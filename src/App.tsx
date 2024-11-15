@@ -64,6 +64,7 @@ function App({ docUrl }: { docUrl: AutomergeUrl }) {
                   changeDoc((d) => {
                     // Use Automerge's updateText for efficient multiplayer edits
                     // (as opposed to replacing the whole title on each edit)
+                    console.log("typed", e.target.value);
                     updateText(d.tasks[index], ["title"], e.target.value);
                   })
                 }

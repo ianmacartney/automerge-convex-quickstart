@@ -14,12 +14,14 @@ export function sync(
   convex: ConvexReactClient,
   opts: {
     debugDump?: boolean;
+    debugLogs?: boolean;
   } = {}
 ) {
   const docSyncs: Record<DocumentId, ConvexDocSync> = {};
+  const log = opts.debugLogs ? console.debug : () => {};
 
   repo.on("document", ({ handle, isNew }) => {
-    console.log("on document", { handle, isNew, state: handle.state });
+    log("on document", { handle, isNew, state: handle.state });
     const documentId = handle.documentId;
     if (handle.inState(["awaitingNetwork", "loading", "requesting"])) {
       handle.request();
@@ -54,6 +56,7 @@ class ConvexDocSync {
   private appliedChanges = new Set<Id<"automerge">>();
   // TODO: pull from local storage
   private lastSyncHeads?: A.Heads;
+  private log: (...args: unknown[]) => void;
 
   constructor(
     private convex: ConvexReactClient,
@@ -63,11 +66,13 @@ class ConvexDocSync {
     isNew: boolean,
     private opts: {
       debugDump?: boolean;
+      debugLogs?: boolean;
     } = {}
   ) {
+    this.log = opts.debugLogs ? console.debug : () => {};
     this.documentId = handle.documentId;
     const lastSeen = getLastSeen(handle.documentId);
-    console.debug({ lastSeen });
+    this.log({ lastSeen });
     if (!isNew && !lastSeen) {
       void this.#load().then(() => {
         void this.#startWatchingHandle();
@@ -77,20 +82,20 @@ class ConvexDocSync {
       void this.#startWatchingHandle();
     }
     handle.on("change", (change) => {
-      console.log("on change", change);
+      this.log("on change", change);
       void this.handleChange();
     });
     handle.on("delete", () => {
-      console.log("handle delete");
+      this.log("handle delete");
     });
     handle.on("heads-changed", (heads) => {
-      console.log("handle heads-changed", heads);
+      this.log("handle heads-changed", heads);
     });
     handle.on("unavailable", () => {
-      console.log("handle unavailable");
+      this.log("handle unavailable");
     });
     handle.on("remote-heads", (remoteHeads) => {
-      console.log("handle remote-heads", remoteHeads);
+      this.log("handle remote-heads", remoteHeads);
     });
   }
 
@@ -114,6 +119,7 @@ class ConvexDocSync {
         const changes: Uint8Array[] = [];
         for (const change of result.page) {
           if (this.appliedChanges.has(change._id)) {
+            this.log("in load but already applied", change._id);
             continue;
           }
           changes.push(new Uint8Array(change.data));
@@ -124,7 +130,7 @@ class ConvexDocSync {
         }
         if (changes.length > 0) {
           const doc = this.handle.docSync();
-          console.debug("initial load: updating", doc, changes.length);
+          this.log("initial load: updating", doc, changes.length);
           this.handle.update((doc) =>
             A.loadIncremental<TaskList>(doc, mergeArrays(changes))
           );
@@ -142,7 +148,7 @@ class ConvexDocSync {
         );
         await new Promise((resolve) => setTimeout(resolve, backoff));
         backoff *= 2;
-        console.log("pull retry");
+        this.log("pull retry");
       }
     }
   }
@@ -159,12 +165,13 @@ class ConvexDocSync {
       watch.onUpdate(() => {
         const results = watch.localQueryResult();
         if (!results) return;
-        console.debug("watch onUpdate", results.page.length, {
+        this.log("watch onUpdate", results.page.length, {
+          cursor,
           isDone: results.isDone,
         });
         if (!results.isDone && !startedNextPage) {
           startedNextPage = true;
-          console.debug("starting next page");
+          this.log("starting next page");
           this.#watch(since, results.continueCursor);
         }
 
@@ -184,7 +191,7 @@ class ConvexDocSync {
           }
           switch (result.type) {
             case "incremental":
-              console.debug(
+              this.log(
                 "watch applyIncremental",
                 result._id,
                 result._creationTime
@@ -192,11 +199,7 @@ class ConvexDocSync {
               changes.push(new Uint8Array(result.data));
               break;
             case "snapshot":
-              console.debug(
-                "watch applySnapshot",
-                result._id,
-                result._creationTime
-              );
+              this.log("watch applySnapshot", result._id, result._creationTime);
               this.handle.update((doc) =>
                 A.loadIncremental<TaskList>(doc, new Uint8Array(result.data))
               );
@@ -208,7 +211,7 @@ class ConvexDocSync {
           }
         }
         if (changes.length > 0) {
-          console.debug("watch applyChanges", changes.length);
+          this.log("watch applyChanges", changes.length);
           this.handle.update((doc) =>
             A.loadIncremental<TaskList>(doc, mergeArrays(changes))
           );
@@ -217,7 +220,7 @@ class ConvexDocSync {
           this.lastSeen = latest;
           const headsAfter = A.getHeads(this.handle.docSync()!);
           if (!headsEqual(headsBefore, headsAfter)) {
-            console.debug("watch saving lastSeen", latest);
+            this.log("watch saving lastSeen", latest);
             this.#saveLastSeen(latest);
           }
         }
@@ -234,7 +237,7 @@ class ConvexDocSync {
     this.repo
       .flush([this.documentId])
       .then(() => {
-        console.debug("flushed & saving lastSeen", lastSeen);
+        this.log("flushed & saving lastSeen", lastSeen);
         localStorage.setItem(
           `lastSeen-${this.documentId}`,
           lastSeen.toString()
@@ -265,7 +268,7 @@ class ConvexDocSync {
   #handling = false;
   async handleChange(): Promise<void> {
     if (this.#handling) {
-      console.debug("handleChange already in progress");
+      this.log("handleChange already in progress");
       if (this.#pending) {
         return this.#pending.promise;
       }
@@ -280,7 +283,7 @@ class ConvexDocSync {
     }
     this.#handling = true;
     try {
-      console.debug("handleStateChange", this.handle.state);
+      this.log("handleStateChange", this.handle.state);
       switch (this.handle.state) {
         case "requesting":
         case "unavailable":
@@ -311,16 +314,17 @@ class ConvexDocSync {
                   }
                 : undefined,
             });
-            console.debug("submitSnapshot", id, heads);
+            this.log("submitSnapshot", id, heads);
             this.appliedChanges.add(id);
             this.lastSyncHeads = heads;
           } else if (headsEqual(heads, syncHeads)) {
-            console.log("already in sync", syncHeads);
+            this.log("already in sync", syncHeads);
           } else {
-            console.log("submitChange", syncHeads, heads);
+            this.log("submitChange", syncHeads, heads);
+            // TODO: See if A.saveSince is more efficient.
             const docBefore = A.view(doc, syncHeads);
             const changes = A.getChanges(docBefore, doc);
-            console.debug("changes", changes.length);
+            this.log("changes", changes.length);
             const id = await this.convex.mutation(api.sync.submitChange, {
               documentId: this.documentId,
               change: toArrayBuffer(mergeArrays(changes)),
@@ -333,7 +337,7 @@ class ConvexDocSync {
             });
             this.appliedChanges.add(id);
             this.lastSyncHeads = heads;
-            console.debug("submittedChange", id);
+            this.log("submittedChange", id);
           }
           break;
         }
