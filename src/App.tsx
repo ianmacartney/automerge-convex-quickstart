@@ -1,4 +1,5 @@
 import automergeLogo from "/automerge.png";
+import convexLogo from "/convex.png";
 import "@picocss/pico/css/pico.min.css";
 import "./App.css";
 import { useDocument } from "@automerge/automerge-repo-react-hooks";
@@ -20,10 +21,16 @@ function App({ docUrl }: { docUrl: AutomergeUrl }) {
   return (
     <>
       <header>
-        <a href="https://automerge.org" target="_blank">
-          <img src={automergeLogo} className="logo" alt="Automerge logo" />
-        </a>
-        <h1>Automerge + Convex Task List</h1>
+        <div className="logos">
+          <a href="https://automerge.org" target="_blank">
+            <img src={automergeLogo} className="logo" alt="Automerge logo" />
+          </a>
+          ➕
+          <a href="https://convex.dev" target="_blank">
+            <img src={convexLogo} className="logo" alt="Convex logo" />
+          </a>
+        </div>
+        <h1>Task List</h1>
       </header>
 
       <button type="button" onClick={addTask}>
@@ -68,7 +75,7 @@ function App({ docUrl }: { docUrl: AutomergeUrl }) {
 
       <footer>
         <p className="read-the-docs">
-          Powered by Automerge + Vite + React + TypeScript
+          Powered by Automerge + Convex + Vite + React + TypeScript
         </p>
       </footer>
     </>

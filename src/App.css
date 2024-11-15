@@ -35,14 +35,15 @@ footer {
   margin: 0;
 }
 
-.task input[type='text'] {
-  background-color: var(--pico-secondary-background);
+.logos {
+  font-size: 3.5em;
+  font-weight: bold;
+  margin: 0 0.5rem;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  justify-content: center;
 }
-
-.task input[type='checkbox']:not(:checked) {
-  background-color: var(--pico-secondary-background);
-}
-
 
 .read-the-docs {
   color: #888;
