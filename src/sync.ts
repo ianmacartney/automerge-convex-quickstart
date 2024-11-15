@@ -1,15 +1,13 @@
 import { DocHandle, DocumentId, Repo } from "@automerge/automerge-repo";
 import * as A from "@automerge/automerge/next";
-import { hash as sha256 } from "fast-sha256";
 import { ConvexReactClient, Watch } from "convex/react";
-import { TaskList } from "../convex/types.ts";
 import { FunctionReturnType } from "convex/server";
 import { api } from "../convex/_generated/api";
 import { Id } from "../convex/_generated/dataModel";
 import { mergeArrays } from "@automerge/automerge-repo/helpers/mergeArrays.js";
 import { throttle } from "@automerge/automerge-repo/helpers/debounce.js";
 
-export function sync(
+export function sync<T = unknown>(
   repo: Repo,
   convex: ConvexReactClient,
   opts: {
@@ -17,7 +15,7 @@ export function sync(
     debugLogs?: boolean;
   } = {}
 ) {
-  const docSyncs: Record<DocumentId, ConvexDocSync> = {};
+  const docSyncs: Record<DocumentId, ConvexDocSync<T>> = {};
   const log = opts.debugLogs ? console.debug : () => {};
 
   repo.on("document", ({ handle, isNew }) => {
@@ -30,7 +28,7 @@ export function sync(
       docSyncs[documentId] = new ConvexDocSync(
         convex,
         repo,
-        handle as DocHandle<TaskList>,
+        handle as DocHandle<T>,
         isNew,
         opts
       );
@@ -46,8 +44,7 @@ function getLastSeen(documentId: DocumentId) {
   return JSON.parse(lastSeen) as number;
 }
 
-class ConvexDocSync {
-  // TODO: pull from local storage
+class ConvexDocSync<T> {
   private lastSeen?: number;
   private watches: Watch<FunctionReturnType<typeof api.sync.pullChanges>>[] =
     [];
@@ -61,7 +58,7 @@ class ConvexDocSync {
   constructor(
     private convex: ConvexReactClient,
     private repo: Repo,
-    private handle: DocHandle<TaskList>,
+    private handle: DocHandle<T>,
     // This is true when the document is just created locally.
     isNew: boolean,
     private opts: {
@@ -105,7 +102,6 @@ class ConvexDocSync {
   }
 
   async #load() {
-    // TODO: load from server and create/update
     let cursor: string | undefined;
     let backoff = 100;
     for (;;) {
@@ -132,7 +128,7 @@ class ConvexDocSync {
           const doc = this.handle.docSync();
           this.log("initial load: updating", doc, changes.length);
           this.handle.update((doc) =>
-            A.loadIncremental<TaskList>(doc, mergeArrays(changes))
+            A.loadIncremental<T>(doc, mergeArrays(changes))
           );
           this.#saveLastSeen(this.lastSeen!);
         }
@@ -183,9 +179,6 @@ class ConvexDocSync {
         const headsBefore = A.getHeads(doc);
         const changes: Uint8Array[] = [];
         for (const result of results.page) {
-          // TODO: Unfortunately we currently don't skip since the callback
-          // is called before the submitting mutation resolves.
-          // We could do a setTimeout here, but holding off for now.
           if (this.appliedChanges.has(result._id)) {
             continue;
           }
@@ -201,7 +194,7 @@ class ConvexDocSync {
             case "snapshot":
               this.log("watch applySnapshot", result._id, result._creationTime);
               this.handle.update((doc) =>
-                A.loadIncremental<TaskList>(doc, new Uint8Array(result.data))
+                A.loadIncremental<T>(doc, new Uint8Array(result.data))
               );
               break;
           }
@@ -213,7 +206,7 @@ class ConvexDocSync {
         if (changes.length > 0) {
           this.log("watch applyChanges", changes.length);
           this.handle.update((doc) =>
-            A.loadIncremental<TaskList>(doc, mergeArrays(changes))
+            A.loadIncremental<T>(doc, mergeArrays(changes))
           );
         }
         if (latest && (!this.lastSeen || latest > this.lastSeen)) {
@@ -335,6 +328,9 @@ class ConvexDocSync {
                   }
                 : undefined,
             });
+            // TODO: Unfortunately we currently don't skip since watch
+            // is called before the submitting mutation resolves.
+            // We could track the hash before submitting if we wanted.
             this.appliedChanges.add(id);
             this.lastSyncHeads = heads;
             this.log("submittedChange", id);
@@ -342,9 +338,6 @@ class ConvexDocSync {
           break;
         }
       }
-      // Then pull changes since the last seen time.
-      // TODO: check if we have the change already
-      // For new documents or new clients, this will be all changes.
     } finally {
       this.#handling = false;
     }

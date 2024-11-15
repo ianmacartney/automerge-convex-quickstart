@@ -3,9 +3,6 @@ import { mutation, query } from "./_generated/server";
 import { vDocumentId } from "./schema";
 import { hash as sha256 } from "fast-sha256";
 
-/**
- * Incremental changes version
- */
 export const submitSnapshot = mutation({
   args: {
     documentId: vDocumentId,

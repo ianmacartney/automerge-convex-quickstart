@@ -1,14 +1,24 @@
-import automergeLogo from "/automerge.png";
-import convexLogo from "/convex.png";
-import "@picocss/pico/css/pico.min.css";
-import "./App.css";
+import type { AutomergeUrl } from "@automerge/automerge-repo";
 import { useDocument } from "@automerge/automerge-repo-react-hooks";
 import { updateText } from "@automerge/automerge/next";
-import type { AutomergeUrl } from "@automerge/automerge-repo";
-import type { TaskList } from "../convex/types";
+import "@picocss/pico/css/pico.min.css";
+import "./App.css";
+import automergeLogo from "/automerge.png";
+import convexLogo from "/convex.png";
+
+export interface Task {
+  id: string;
+  title: string;
+  done: boolean;
+}
+
+export interface TaskList {
+  tasks: Task[];
+  text: string;
+}
 
 function App({ docUrl }: { docUrl: AutomergeUrl }) {
-  const [doc, changeDoc] = useDocument<TaskList & { text: string }>(docUrl);
+  const [doc, changeDoc] = useDocument<TaskList>(docUrl);
 
   function addTask() {
     const id = crypto.randomUUID();

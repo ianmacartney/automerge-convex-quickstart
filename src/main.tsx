@@ -4,13 +4,12 @@ import { RepoContext } from "@automerge/automerge-repo-react-hooks";
 import { IndexedDBStorageAdapter } from "@automerge/automerge-repo-storage-indexeddb";
 import React from "react";
 import ReactDOM from "react-dom/client";
-import App from "./App.tsx";
+import App, { type TaskList } from "./App.tsx";
 import "./index.css";
 import {
   // ConvexProvider,
   ConvexReactClient,
 } from "convex/react";
-import { TaskList } from "../convex/types.ts";
 import { sync } from "./sync.ts";
 
 // We fall back to a demo backend so you can try it out before setting up your
@@ -36,7 +35,7 @@ let handle;
 if (isValidAutomergeUrl(rootDocUrl)) {
   handle = repo.find(rootDocUrl);
 } else {
-  handle = repo.create<TaskList & { text: string }>({
+  handle = repo.create<TaskList>({
     tasks: [],
     text: "",
   });

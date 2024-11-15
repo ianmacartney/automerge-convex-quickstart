@@ -13,7 +13,6 @@ import {
   query,
 } from "./_generated/server";
 import { vDocumentId } from "./schema";
-import { TaskList } from "./types";
 import { v } from "convex/values";
 
 async function load() {
@@ -96,7 +95,7 @@ async function loadDoc(ctx: { db: DatabaseReader }, documentId: DocumentId) {
     .withIndex("doc_type_hash", (q) => q.eq("documentId", documentId))
     .collect();
   const A = await automergeLoaded();
-  return A.loadIncremental<TaskList>(
+  return A.loadIncremental(
     A.init(),
     mergeArrays(result.map((r) => new Uint8Array(r.data)))
   );
