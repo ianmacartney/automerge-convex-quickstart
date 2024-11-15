@@ -356,26 +356,6 @@ class ConvexDocSync {
   }
 }
 
-/**
- * Hash functions
- */
-
-// Based on https://github.com/automerge/automerge-repo/blob/fixes/packages/automerge-repo/src/storage/keyHash.ts
-function keyHash(binary: Uint8Array) {
-  // calculate hash
-  const hash = sha256(binary);
-  // To hex string
-  return Array.from(hash, (byte) => byte.toString(16).padStart(2, "0")).join(
-    ""
-  );
-}
-
-function headsHash(heads: A.Heads): string {
-  const encoder = new TextEncoder();
-  const headsbinary = mergeArrays(heads.map((h) => encoder.encode(h)));
-  return keyHash(headsbinary);
-}
-
 const toArrayBuffer = (bytes: Uint8Array) => {
   const { buffer, byteOffset, byteLength } = bytes;
   return buffer.slice(byteOffset, byteOffset + byteLength);
