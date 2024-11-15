@@ -37,7 +37,7 @@ function App({ docUrl }: { docUrl: AutomergeUrl }) {
       <textarea
         value={doc?.text ?? ""}
         disabled={!doc}
-        placeholder="Task list description goes here"
+        placeholder="Describe this list..."
         onChange={(e) =>
           // Use Automerge's updateText for efficient multiplayer edits
           // (as opposed to replacing the whole title on each edit)
