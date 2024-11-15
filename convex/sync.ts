@@ -44,12 +44,25 @@ export const submitChange = mutation({
     change: v.bytes(),
   },
   handler: async (ctx, args) => {
-    return ctx.db.insert("automerge", {
-      documentId: args.documentId,
-      data: args.change,
-      hash: keyHash(new Uint8Array(args.change)),
-      type: "incremental",
-    });
+    const hash = keyHash(new Uint8Array(args.change));
+    const existing = await ctx.db
+      .query("automerge")
+      .withIndex("doc_type_hash", (q) =>
+        q
+          .eq("documentId", args.documentId)
+          .eq("type", "incremental")
+          .eq("hash", hash)
+      )
+      .first();
+    if (!existing) {
+      return ctx.db.insert("automerge", {
+        documentId: args.documentId,
+        data: args.change,
+        hash,
+        type: "incremental",
+      });
+    }
+    return existing._id;
   },
 });
 
