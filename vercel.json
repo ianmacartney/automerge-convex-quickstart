@@ -1,0 +1,10 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "npx convex deploy --cmd 'vite build --base=$VITE_BASEPATH --outDir=dist$VITE_BASEPATH'",
+  "rewrites": [
+    {
+      "source": "/automerge(.*)",
+      "destination": "/automerge"
+    }
+  ]
+}
