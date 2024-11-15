@@ -9,7 +9,13 @@ import { Id } from "../convex/_generated/dataModel";
 import { mergeArrays } from "@automerge/automerge-repo/helpers/mergeArrays.js";
 import { throttle } from "@automerge/automerge-repo/helpers/debounce.js";
 
-export function sync(repo: Repo, convex: ConvexReactClient) {
+export function sync(
+  repo: Repo,
+  convex: ConvexReactClient,
+  opts: {
+    debugDump?: boolean;
+  } = {}
+) {
   const docSyncs: Record<DocumentId, ConvexDocSync> = {};
 
   repo.on("document", ({ handle, isNew }) => {
@@ -20,7 +26,8 @@ export function sync(repo: Repo, convex: ConvexReactClient) {
         convex,
         repo,
         handle as DocHandle<TaskList>,
-        isNew
+        isNew,
+        opts
       );
     }
   });
@@ -49,7 +56,11 @@ class ConvexDocSync {
     private convex: ConvexReactClient,
     private repo: Repo,
     private handle: DocHandle<TaskList>,
-    isNew: boolean
+    // This is true when the document is just created locally.
+    isNew: boolean,
+    private opts: {
+      debugDump?: boolean;
+    } = {}
   ) {
     this.documentId = handle.documentId;
     const lastSeen = getLastSeen(handle.documentId);
@@ -297,10 +308,12 @@ class ConvexDocSync {
             const id = await this.convex.mutation(api.sync.submitSnapshot, {
               documentId: this.documentId,
               data: toArrayBuffer(A.save(doc)),
-              debugDump: {
-                heads,
-                content: doc,
-              },
+              debugDump: this.opts.debugDump
+                ? {
+                    heads,
+                    content: doc,
+                  }
+                : undefined,
             });
             console.debug("submitSnapshot", id, heads);
             this.appliedChanges.add(id);
@@ -315,10 +328,12 @@ class ConvexDocSync {
             const id = await this.convex.mutation(api.sync.submitChange, {
               documentId: this.documentId,
               change: toArrayBuffer(mergeArrays(changes)),
-              debugDump: {
-                heads,
-                change: changes.map((c) => A.decodeChange(c)),
-              },
+              debugDump: this.opts.debugDump
+                ? {
+                    heads,
+                    change: changes.map((c) => A.decodeChange(c)),
+                  }
+                : undefined,
             });
             this.appliedChanges.add(id);
             this.lastSyncHeads = heads;

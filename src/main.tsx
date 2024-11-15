@@ -29,7 +29,7 @@ const repo = new Repo({
 
 const convex = new ConvexReactClient(convexUrl);
 
-sync(repo, convex);
+sync(repo, convex, { debugDump: true });
 
 const rootDocUrl = `${document.location.hash.substring(1)}`;
 let handle;
