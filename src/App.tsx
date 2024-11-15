@@ -11,13 +11,22 @@ function App({ docUrl }: { docUrl: AutomergeUrl }) {
   const [doc, changeDoc] = useDocument<TaskList & { text: string }>(docUrl);
 
   function addTask() {
+    const id = crypto.randomUUID();
     changeDoc((d) =>
       d.tasks.unshift({
-        id: crypto.randomUUID(),
+        id,
         title: "",
         done: false,
       })
     );
+    // Focus the new input after a short delay to ensure the DOM has updated
+    setTimeout(() => {
+      (
+        document.querySelector(
+          `input[data-task-id="${id}"]`
+        ) as HTMLInputElement
+      )?.focus();
+    }, 0);
   }
   return (
     <>
@@ -65,6 +74,7 @@ function App({ docUrl }: { docUrl: AutomergeUrl }) {
 
               <input
                 type="text"
+                data-task-id={id}
                 placeholder="What needs doing?"
                 value={title || ""}
                 onKeyDown={(e) => {
