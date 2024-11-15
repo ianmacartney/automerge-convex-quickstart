@@ -8,8 +8,16 @@ import type { AutomergeUrl } from "@automerge/automerge-repo";
 import type { TaskList } from "../convex/types";
 
 function App({ docUrl }: { docUrl: AutomergeUrl }) {
-  const [doc, changeDoc] = useDocument<{ text: string }>(docUrl);
+  const [doc, changeDoc] = useDocument<TaskList & { text: string }>(docUrl);
 
+  function addTask() {
+    changeDoc((d) =>
+      d.tasks.unshift({
+        title: "",
+        done: false,
+      })
+    );
+  }
   return (
     <>
       <header>
@@ -32,6 +40,47 @@ function App({ docUrl }: { docUrl: AutomergeUrl }) {
           changeDoc((d) => updateText(d, ["text"], e.target.value))
         }
       />
+
+      <button type="button" onClick={addTask}>
+        <b>+</b> New task
+      </button>
+
+      <div id="task-list">
+        {doc &&
+          doc.tasks?.map(({ title, done }, index) => (
+            <div className="task" key={index}>
+              <input
+                type="checkbox"
+                checked={done}
+                onChange={() =>
+                  changeDoc((d) => {
+                    d.tasks[index].done = !d.tasks[index].done;
+                  })
+                }
+              />
+
+              <input
+                type="text"
+                placeholder="What needs doing?"
+                value={title || ""}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    addTask();
+                  }
+                }}
+                onChange={(e) =>
+                  changeDoc((d) => {
+                    // Use Automerge's updateText for efficient multiplayer edits
+                    // (as opposed to replacing the whole title on each edit)
+                    console.log("typed", e.target.value);
+                    updateText(d.tasks[index], ["title"], e.target.value);
+                  })
+                }
+                style={done ? { textDecoration: "line-through" } : {}}
+              />
+            </div>
+          ))}
+      </div>
 
       <footer>
         <p className="read-the-docs">

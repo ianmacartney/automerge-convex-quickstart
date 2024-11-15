@@ -36,7 +36,10 @@ let handle;
 if (isValidAutomergeUrl(rootDocUrl)) {
   handle = repo.find(rootDocUrl);
 } else {
-  handle = repo.create<{ text: string }>({ text: "" });
+  handle = repo.create<TaskList & { text: string }>({
+    tasks: [],
+    text: "",
+  });
 }
 const docUrl = (document.location.hash = handle.url);
 
