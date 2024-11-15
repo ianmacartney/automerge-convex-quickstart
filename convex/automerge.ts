@@ -4,7 +4,6 @@ import "./_patch";
 import { mergeArrays } from "@automerge/automerge-repo/helpers/mergeArrays.js";
 // @ts-expect-error wasm is not a module
 import { automergeWasmBase64 } from "@automerge/automerge/automerge.wasm.base64.js";
-import { hash as sha256 } from "fast-sha256";
 import { api, internal } from "./_generated/api";
 import {
   action,
@@ -113,26 +112,6 @@ export const deleteDoc = internalMutation({
     await Promise.all(result.map((r) => ctx.db.delete(r._id)));
   },
 });
-
-/**
- * Hash functions
- */
-
-// Based on https://github.com/automerge/automerge-repo/blob/fixes/packages/automerge-repo/src/storage/keyHash.ts
-function keyHash(binary: Uint8Array) {
-  // calculate hash
-  const hash = sha256(binary);
-  // To hex string
-  return Array.from(hash, (byte) => byte.toString(16).padStart(2, "0")).join(
-    ""
-  );
-}
-
-function headsHash(heads: Automerge.Heads): string {
-  const encoder = new TextEncoder();
-  const headsbinary = mergeArrays(heads.map((h: string) => encoder.encode(h)));
-  return keyHash(headsbinary);
-}
 
 const toArrayBuffer = (bytes: Uint8Array) => {
   const { buffer, byteOffset, byteLength } = bytes;
