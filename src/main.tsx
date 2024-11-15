@@ -17,7 +17,7 @@ import { sync } from "./sync.ts";
 // We fall back to a demo backend here
 const convexUrl =
   (import.meta.env.VITE_CONVEX_URL as string) ??
-  "https://mellow-anaconda-653.convex.cloud";
+  "https://dazzling-cobra-717.convex.cloud";
 
 const repo = new Repo({
   // network: [new BrowserWebSocketClientAdapter("ws://sync.automerge.org")],
