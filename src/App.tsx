@@ -36,7 +36,10 @@ function App({ docUrl }: { docUrl: AutomergeUrl }) {
       <textarea
         value={doc?.text ?? ""}
         disabled={!doc}
+        placeholder="Task list description goes here"
         onChange={(e) =>
+          // Use Automerge's updateText for efficient multiplayer edits
+          // (as opposed to replacing the whole title on each edit)
           changeDoc((d) => updateText(d, ["text"], e.target.value))
         }
       />
@@ -70,9 +73,6 @@ function App({ docUrl }: { docUrl: AutomergeUrl }) {
                 }}
                 onChange={(e) =>
                   changeDoc((d) => {
-                    // Use Automerge's updateText for efficient multiplayer edits
-                    // (as opposed to replacing the whole title on each edit)
-                    console.log("typed", e.target.value);
                     updateText(d.tasks[index], ["title"], e.target.value);
                   })
                 }
