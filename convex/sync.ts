@@ -13,9 +13,6 @@ export const submitSnapshot = mutation({
     debugDump: v.optional(v.any()),
   },
   handler: async (ctx, args) => {
-    // const A = await load();
-    // const newDoc = A.load(new Uint8Array(args.data));
-    // const hash = headsHash(A.getHeads(newDoc));
     const hash = keyHash(new Uint8Array(args.data));
     const existing = await ctx.db
       .query("automerge")
@@ -111,6 +108,7 @@ export const pullChanges = query({
     return result;
   },
 });
+
 /**
  * Hash functions
  */

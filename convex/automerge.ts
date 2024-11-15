@@ -11,7 +11,6 @@ import {
   DatabaseReader,
   internalMutation,
   internalQuery,
-  mutation,
   query,
 } from "./_generated/server";
 import { vDocumentId } from "./schema";
@@ -112,106 +111,6 @@ export const deleteDoc = internalMutation({
       .withIndex("doc_type_hash", (q) => q.eq("documentId", args.documentId))
       .collect();
     await Promise.all(result.map((r) => ctx.db.delete(r._id)));
-  },
-});
-
-export const testAdd = internalMutation({
-  args: {},
-  handler: async (ctx) => {
-    if (Automerge.isWasmInitialized()) {
-      console.log("wasm already initialized");
-    } else {
-      void load();
-    }
-    // const doc = A.load<TaskList>();
-    const documentId = "eNEmGYHnwmXkhiWVuzT6CNQvKYa" as DocumentId;
-    const orig = await loadDoc(ctx, documentId);
-    const A = await automergeLoaded();
-    const o2 = A.clone(orig);
-    // To update and submit a new snapshot:
-    const heads = A.getHeads(orig);
-    const doc = A.change(orig, (doc) => {
-      doc.tasks[0].title = "test2";
-    });
-
-    const missing = A.getMissingDeps(doc, heads);
-    console.log("missing", missing);
-
-    const missing2 = A.getMissingDeps(orig, A.getHeads(doc));
-    console.log("missing2", missing2);
-
-    const missing3 = A.getMissingDeps(o2, A.getHeads(doc));
-    console.log("missing3", missing3);
-
-    // To make a new head:
-    // const doc = A.from({
-    //   tasks: [{ title: "test", done: true }],
-    // });
-    // const doc = A.from({ tasks: [{ title: "test", done: true }] });
-    const binary = A.save(doc);
-    await ctx.runMutation(api.sync.submitSnapshot, {
-      documentId,
-      data: toArrayBuffer(binary),
-    });
-
-    // const documentId = "automerge:eNEmGYHnwmXkhiWVuzT6CNQvKYa" as DocumentId;
-    // await ctx.runMutation(api.automerge.insert, {
-    //   data: toArrayBuffer(A.save(doc)),
-    //   documentId,
-    //   hash: headsHash(A.getHeads(doc)),
-    // });
-    // const handle = new DocHandle<TaskList>(docId, {
-    //   isNew: true,
-    //   initialValue: doc,
-    // });
-  },
-});
-
-export const testToggle = mutation({
-  args: { documentId: vDocumentId },
-  handler: async (ctx, args) => {
-    void load();
-    const result = await ctx.db
-      .query("automerge")
-      .withIndex("doc_type_hash", (q) => q.eq("documentId", args.documentId))
-      .collect();
-    const A = await automergeLoaded();
-    const doc = A.loadIncremental<TaskList>(
-      A.init(),
-      mergeArrays(result.map((r) => new Uint8Array(r.data)))
-    );
-    const sinceHeads = A.getHeads(doc);
-    const doc2 = A.change<TaskList>(doc, (doc) => {
-      doc.tasks[0].done = !doc.tasks[0].done;
-    });
-    const change = A.getLastLocalChange(doc2);
-    const change2 = A.saveSince(doc2, sinceHeads);
-    if (!change) throw new Error("no change");
-    if (change.length !== change2.length) throw new Error("length mismatch");
-    if (!change.every((c, i) => c === change2[i]))
-      throw new Error("content mismatch");
-    await ctx.runMutation(api.sync.submitChange, {
-      documentId: args.documentId,
-      change: toArrayBuffer(change),
-    });
-    // const delta = await ctx.runQuery(api.automerge.getChange, {
-    //   documentId: args.documentId,
-    //   sinceHeads: sinceHeads,
-    // });
-    // const change3 = new Uint8Array(delta.change!);
-    // if (change3.length !== change.length) throw new Error("length mismatch");
-    // if (!change3.every((c, i) => c === change[i]))
-    //   throw new Error(
-    //     `delta content mismatch: ${change3.toString()} !== ${change.toString()}`
-    //   );
-    // const doc3 = A.change(doc, (doc) => {
-    //   doc.tasks[0].done = false;
-    // });
-    // await ctx.runMutation(api.automerge.change, {
-    //   documentId: args.documentId,
-    //   data: toArrayBuffer(A.save(doc3)),
-    //   hash: headsHash(A.getHeads(doc3)),
-    // });
   },
 });
 
