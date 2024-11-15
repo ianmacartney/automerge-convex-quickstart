@@ -1,5 +1,4 @@
 import { isValidAutomergeUrl, Repo } from "@automerge/automerge-repo";
-// import { BrowserWebSocketClientAdapter } from "@automerge/automerge-repo-network-websocket";
 // import { BroadcastChannelNetworkAdapter } from "@automerge/automerge-repo-network-broadcastchannel";
 import { RepoContext } from "@automerge/automerge-repo-react-hooks";
 import { IndexedDBStorageAdapter } from "@automerge/automerge-repo-storage-indexeddb";
@@ -14,16 +13,17 @@ import {
 import { TaskList } from "../convex/types.ts";
 import { sync } from "./sync.ts";
 
-// We fall back to a demo backend here
+// We fall back to a demo backend so you can try it out before setting up your
+// own Convex project.
 const convexUrl =
   (import.meta.env.VITE_CONVEX_URL as string) ??
   "https://dazzling-cobra-717.convex.cloud";
 
 const repo = new Repo({
-  // network: [new BrowserWebSocketClientAdapter("ws://sync.automerge.org")],
-  // network: [new BroadcastChannelNetworkAdapter()],
-  // network: [new ConvexNetworkAdapter(options)],
-  network: [],
+  network: [
+    // If you want tabs to immediately reflect each other's changes:
+    // new BroadcastChannelNetworkAdapter(),
+  ],
   storage: new IndexedDBStorageAdapter(),
 });
 
