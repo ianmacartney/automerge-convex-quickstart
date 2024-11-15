@@ -36,7 +36,7 @@ if (isValidAutomergeUrl(rootDocUrl)) {
   handle = repo.find(rootDocUrl);
 } else {
   handle = repo.create<TaskList>({
-    tasks: [],
+    tasks: [{ id: crypto.randomUUID(), title: "", done: false }],
     text: "",
   });
 }
