@@ -245,6 +245,8 @@ class ConvexDocSync<T> {
     for (const unsubscribe of this.unsubscribes) {
       unsubscribe();
     }
+    // TODO: this removes all listeners, where we only want to remove
+    // the ones we added. Just add this to the unsubscribes on initialization.
     this.handle.off("change");
     this.handle.off("delete");
     this.handle.off("heads-changed");
