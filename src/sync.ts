@@ -19,8 +19,11 @@ export function sync(
   const docSyncs: Record<DocumentId, ConvexDocSync> = {};
 
   repo.on("document", ({ handle, isNew }) => {
-    console.log("on document", { handle, isNew });
+    console.log("on document", { handle, isNew, state: handle.state });
     const documentId = handle.documentId;
+    if (handle.inState(["awaitingNetwork", "loading", "requesting"])) {
+      handle.request();
+    }
     if (!docSyncs[documentId]) {
       docSyncs[documentId] = new ConvexDocSync(
         convex,
@@ -117,21 +120,10 @@ class ConvexDocSync {
         }
         if (changes.length > 0) {
           const doc = this.handle.docSync();
-          if (doc) {
-            this.handle.update((doc) =>
-              A.loadIncremental<TaskList>(doc, mergeArrays(changes))
-            );
-          } else {
-            const newDoc = A.loadIncremental<TaskList>(
-              A.init(),
-              mergeArrays(changes)
-            );
-            const dummyHandle = new DocHandle<TaskList>(this.documentId, {
-              initialValue: newDoc,
-              isNew,
-            });
-            this.handle.merge(dummyHandle);
-          }
+          console.debug("initial load: updating", doc, changes.length);
+          this.handle.update((doc) =>
+            A.loadIncremental<TaskList>(doc, mergeArrays(changes))
+          );
           this.#saveLastSeen(this.lastSeen!);
         }
         if (result.isDone) {
