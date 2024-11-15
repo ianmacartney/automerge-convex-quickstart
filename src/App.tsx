@@ -13,6 +13,7 @@ function App({ docUrl }: { docUrl: AutomergeUrl }) {
   function addTask() {
     changeDoc((d) =>
       d.tasks.unshift({
+        id: crypto.randomUUID(),
         title: "",
         done: false,
       })
@@ -50,8 +51,8 @@ function App({ docUrl }: { docUrl: AutomergeUrl }) {
 
       <div id="task-list">
         {doc &&
-          doc.tasks?.map(({ title, done }, index) => (
-            <div className="task" key={index}>
+          doc.tasks?.map(({ id, title, done }, index) => (
+            <div className="task" key={id ?? index}>
               <input
                 type="checkbox"
                 checked={done}
