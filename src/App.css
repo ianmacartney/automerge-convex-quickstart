@@ -41,6 +41,7 @@ footer {
 
 .logos {
   font-size: 3.5em;
+  height: 161px;
   font-weight: bold;
   margin: 0 0.5rem;
   display: flex;
