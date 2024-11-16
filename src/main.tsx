@@ -1,4 +1,8 @@
-import { isValidAutomergeUrl, Repo } from "@automerge/automerge-repo";
+import {
+  DocHandle,
+  isValidAutomergeUrl,
+  Repo,
+} from "@automerge/automerge-repo";
 // import { BroadcastChannelNetworkAdapter } from "@automerge/automerge-repo-network-broadcastchannel";
 import { RepoContext } from "@automerge/automerge-repo-react-hooks";
 import { IndexedDBStorageAdapter } from "@automerge/automerge-repo-storage-indexeddb";
@@ -31,9 +35,15 @@ const convex = new ConvexReactClient(convexUrl);
 sync(repo, convex);
 
 const rootDocUrl = `${document.location.hash.substring(1)}`;
-let handle;
+let handle: DocHandle<TaskList>;
 if (isValidAutomergeUrl(rootDocUrl)) {
-  handle = repo.find(rootDocUrl);
+  handle = repo.find<TaskList>(rootDocUrl);
+  // Migrate old documents without a `text` field to have an empty string
+  void handle.doc().then((doc) => {
+    if (doc && doc?.text === undefined) {
+      handle.change((d) => (d.text = ""));
+    }
+  });
 } else {
   handle = repo.create<TaskList>({
     tasks: [{ id: crypto.randomUUID(), title: "", done: false }],
