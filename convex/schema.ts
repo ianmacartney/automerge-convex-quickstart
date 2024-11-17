@@ -8,6 +8,8 @@ export const vDocumentId = v.string() as VString<DocumentId>;
 export default defineSchema({
   automerge: defineTable({
     documentId: vDocumentId,
+    seqNo: v.number(),
+
     type: v.union(v.literal("incremental"), v.literal("snapshot")),
     hash: v.string(),
     data: v.bytes(),
@@ -15,5 +17,5 @@ export default defineSchema({
     debugDump: v.optional(v.any()),
   })
     .index("doc_type_hash", ["documentId", "type", "hash"])
-    .index("documentId", ["documentId"]),
+    .index("documentId", ["documentId", "seqNo"]),
 });

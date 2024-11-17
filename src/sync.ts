@@ -6,6 +6,8 @@ import { api } from "../convex/_generated/api";
 import { Id } from "../convex/_generated/dataModel";
 import { mergeArrays } from "@automerge/automerge-repo/helpers/mergeArrays.js";
 import { throttle } from "@automerge/automerge-repo/helpers/debounce.js";
+import { Channel } from "async-channel";
+import { ConvexHttpClient } from "convex/browser";
 
 export function sync<T = unknown>(
   repo: Repo,
@@ -45,15 +47,15 @@ function getLastSeen(documentId: DocumentId) {
 }
 
 class ConvexDocSync<T> {
-  private lastSeen?: number;
-  private watches: Watch<FunctionReturnType<typeof api.sync.pullChanges>>[] =
-    [];
+  private lastSeen: number = 0;
+  private watches: Watch<number>[] = [];    
   private unsubscribes: (() => void)[] = [];
   public documentId: DocumentId;
   private appliedChanges = new Set<Id<"automerge">>();
   // TODO: pull from local storage
   private lastSyncHeads?: A.Heads;
   private log: (...args: unknown[]) => void;
+  private httpClient: ConvexHttpClient;
 
   constructor(
     private convex: ConvexReactClient,
@@ -66,7 +68,8 @@ class ConvexDocSync<T> {
       debugLogs?: boolean;
     } = {}
   ) {
-    this.log = opts.debugLogs ? console.debug : () => {};
+    this.httpClient = new ConvexHttpClient((convex as any).address);
+    this.log = (opts.debugLogs || true) ? console.debug : () => {};
     this.documentId = handle.documentId;
     const lastSeen = getLastSeen(handle.documentId);
     this.log({ lastSeen });
@@ -74,8 +77,7 @@ class ConvexDocSync<T> {
       void this.#load().then(() => {
         void this.#startWatchingHandle();
       });
-    } else {
-      this.lastSeen = lastSeen ?? 0;
+    } else {      
       void this.#startWatchingHandle();
     }
     handle.on("change", (change) => {
@@ -97,46 +99,45 @@ class ConvexDocSync<T> {
   }
 
   #startWatchingHandle() {
-    this.#watch(this.lastSeen ?? 0);
+    void this.#watch();
     void this.handleChange();
   }
 
   async #load() {
-    let cursor: string | undefined;
     let backoff = 100;
     for (;;) {
-      try {
-        const result = await this.convex.query(api.sync.pullChanges, {
+      try {        
+        const maxSeqNo = await this.httpClient.query(api.sync.maxSeqNo, {
           documentId: this.documentId,
-          since: 0,
-          numItems: 1000,
-          cursor,
         });
-        const changes: Uint8Array[] = [];
-        for (const change of result.page) {
-          if (this.appliedChanges.has(change._id)) {
-            this.log("in load but already applied", change._id);
-            continue;
+        this.log("initial load maxSeqNo", maxSeqNo);
+        while (this.lastSeen < maxSeqNo) {
+          const result = await this.httpClient.query(api.sync.pullChanges, {
+            documentId: this.documentId,
+            since: this.lastSeen,
+            numItems: 1000,
+          });
+          const changes: Uint8Array[] = [];
+          for (const change of result) {            
+            if (change.seqNo > this.lastSeen) {
+              this.lastSeen = change.seqNo;
+            }
+            if (!this.appliedChanges.has(change._id)) {            
+              changes.push(new Uint8Array(change.data));
+              this.appliedChanges.add(change._id);              
+            }
           }
-          changes.push(new Uint8Array(change.data));
-          this.appliedChanges.add(change._id);
-          if (!this.lastSeen || change._creationTime > this.lastSeen) {
-            this.lastSeen = change._creationTime;
+          if (changes.length > 0) {
+            const doc = this.handle.docSync();
+            this.log("initial load: updating", doc, changes.length);
+            this.handle.update((doc) =>
+              A.loadIncremental<T>(doc, mergeArrays(changes))
+            );
+            this.#saveLastSeen(this.lastSeen!);
           }
         }
-        if (changes.length > 0) {
-          const doc = this.handle.docSync();
-          this.log("initial load: updating", doc, changes.length);
-          this.handle.update((doc) =>
-            A.loadIncremental<T>(doc, mergeArrays(changes))
-          );
-          this.#saveLastSeen(this.lastSeen!);
-        }
-        if (result.isDone) {
-          break;
-        } else {
-          cursor = result.continueCursor;
-        }
+        this.log("initial load done", this.lastSeen);
+        return;
       } catch (error) {
         console.error(
           `pull failed - waiting for ${(backoff / 1000).toFixed(1)}s`,
@@ -146,79 +147,77 @@ class ConvexDocSync<T> {
         backoff *= 2;
         this.log("pull retry");
       }
-    }
+    }    
   }
 
-  #watch(since: number, cursor?: string) {
-    const watch = this.convex.watchQuery(api.sync.pullChanges, {
+  async #watch() {
+    const maxSeqNoChannel = new Channel<number>();
+    const watch = this.convex.watchQuery(api.sync.maxSeqNo, {
       documentId: this.documentId,
-      since,
-      cursor,
     });
     this.watches.push(watch);
-    let startedNextPage = false;
-    this.unsubscribes.push(
-      watch.onUpdate(() => {
-        const results = watch.localQueryResult();
-        if (!results) return;
-        this.log("watch onUpdate", results.page.length, {
-          cursor,
-          isDone: results.isDone,
+    const currentMaxSeqNo = watch.localQueryResult();
+    if (currentMaxSeqNo !== undefined) {
+      maxSeqNoChannel.push(currentMaxSeqNo);
+    }
+    this.unsubscribes.push(watch.onUpdate(() => {
+      const maxSeqNo = watch.localQueryResult();
+      if (maxSeqNo !== undefined) {
+        maxSeqNoChannel.push(maxSeqNo);
+      }
+    }));    
+    for (;;) {
+      const maxSeqNo = await maxSeqNoChannel.get();
+      while (this.lastSeen < maxSeqNo) {
+        const results = await this.httpClient.query(api.sync.pullChanges, {
+          documentId: this.documentId,
+          since: this.lastSeen,
+          numItems: 1000,
         });
-        if (!results.isDone && !startedNextPage) {
-          startedNextPage = true;
-          this.log("starting next page");
-          this.#watch(since, results.continueCursor);
-        }
-
-        let latest = this.lastSeen ?? 0;
         const doc = this.handle.docSync();
         if (!doc) {
           throw new Error("doc is undefined in watch");
         }
         const headsBefore = A.getHeads(doc);
         const changes: Uint8Array[] = [];
-        for (const result of results.page) {
-          if (this.appliedChanges.has(result._id)) {
-            continue;
+        for (const result of results) {
+          if (result.seqNo > this.lastSeen) {
+            this.lastSeen = result.seqNo;
           }
-          switch (result.type) {
-            case "incremental":
-              this.log(
-                "watch applyIncremental",
-                result._id,
-                result._creationTime
-              );
-              changes.push(new Uint8Array(result.data));
-              break;
-            case "snapshot":
-              this.log("watch applySnapshot", result._id, result._creationTime);
-              this.handle.update((doc) =>
-                A.loadIncremental<T>(doc, new Uint8Array(result.data))
-              );
-              break;
+          if (!this.appliedChanges.has(result._id)) {
+            switch (result.type) {
+              case "incremental":
+                this.log(
+                  "watch applyIncremental",
+                  result._id,
+                  result._creationTime
+                );
+                changes.push(new Uint8Array(result.data));
+                break;
+              case "snapshot":
+                this.log("watch applySnapshot", result._id, result._creationTime);
+                this.handle.update((doc) =>
+                  A.loadIncremental<T>(doc, new Uint8Array(result.data))
+                );
+                break;
+            }            
+            this.appliedChanges.add(result._id);
           }
-          this.appliedChanges.add(result._id);
-          if (result._creationTime > latest) {
-            latest = result._creationTime;
-          }
-        }
+          console.log("watch applied", result._id, result.seqNo, this.lastSeen);          
+        }        
         if (changes.length > 0) {
           this.log("watch applyChanges", changes.length);
           this.handle.update((doc) =>
             A.loadIncremental<T>(doc, mergeArrays(changes))
           );
         }
-        if (latest && (!this.lastSeen || latest > this.lastSeen)) {
-          this.lastSeen = latest;
-          const headsAfter = A.getHeads(this.handle.docSync()!);
-          if (!headsEqual(headsBefore, headsAfter)) {
-            this.log("watch saving lastSeen", latest);
-            this.#saveLastSeen(latest);
-          }
-        }
-      })
-    );
+        const headsAfter = A.getHeads(this.handle.docSync()!);
+        if (!headsEqual(headsBefore, headsAfter)) {
+          this.log("watch saving lastSeen", this.lastSeen);
+          this.#saveLastSeen(this.lastSeen);
+        }        
+      }
+    }
   }
 
   // With throttle only the last call within the interval will be executed.
