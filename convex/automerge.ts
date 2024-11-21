@@ -1,6 +1,5 @@
 import type { DocumentId } from "@automerge/automerge-repo/slim";
 import * as Automerge from "@automerge/automerge/slim/next";
-import "./_patch";
 import { mergeArrays } from "@automerge/automerge-repo/helpers/mergeArrays.js";
 // @ts-expect-error wasm is not a module
 import { automergeWasmBase64 } from "@automerge/automerge/automerge.wasm.base64.js";
