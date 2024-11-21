@@ -15,7 +15,6 @@ import type {
 } from "convex/server";
 import type * as automerge from "../automerge.js";
 import type * as sync from "../sync.js";
-import type * as types from "../types.js";
 
 /**
  * A utility for referencing Convex functions in your app's API.
@@ -28,7 +27,6 @@ import type * as types from "../types.js";
 declare const fullApi: ApiFromModules<{
   automerge: typeof automerge;
   sync: typeof sync;
-  types: typeof types;
 }>;
 export declare const api: FilterApi<
   typeof fullApi,
