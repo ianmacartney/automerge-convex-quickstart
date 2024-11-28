@@ -20,17 +20,25 @@ export const submitSnapshot = mutation({
           .eq("hash", hash)
       )
       .first();
-    if (!existing) {
-      return ctx.db.insert("automerge", {
-        documentId: args.documentId,
-        data: args.data,
-        hash,
-        type: "snapshot",
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-        debugDump: args.debugDump,
-      });
+    if (existing) {
+      return existing._id;
     }
-    return existing._id;
+    const max = await ctx.db
+      .query("automerge")
+      .withIndex("documentId", (q) => q.eq("documentId", args.documentId))
+      .order("desc")
+      .first();
+    const nextSeqNo = (max?.seqNo ?? 0) + 1;
+    return ctx.db.insert("automerge", {
+      documentId: args.documentId,
+      seqNo: nextSeqNo,
+
+      data: args.data,
+      hash,
+      type: "snapshot",
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+      debugDump: args.debugDump,
+    });
   },
 });
 
@@ -51,58 +59,54 @@ export const submitChange = mutation({
           .eq("hash", hash)
       )
       .first();
-    if (!existing) {
-      return ctx.db.insert("automerge", {
-        documentId: args.documentId,
-        data: args.change,
-        hash,
-        type: "incremental",
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-        debugDump: args.debugDump,
-      });
+    if (existing) {
+      return existing._id;
     }
-    return existing._id;
+    const max = await ctx.db
+      .query("automerge")
+      .withIndex("documentId", (q) => q.eq("documentId", args.documentId))
+      .order("desc")
+      .first();
+    const nextSeqNo = (max?.seqNo ?? 0) + 1;
+
+    return ctx.db.insert("automerge", {
+      documentId: args.documentId,
+      seqNo: nextSeqNo,
+      data: args.change,
+      hash,
+      type: "incremental",
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+      debugDump: args.debugDump,
+    });
   },
 });
-
-const MINUTE = 60 * 1000;
-const RETENTION_BUFFER = 5 * MINUTE;
 
 export const pullChanges = query({
   args: {
     documentId: vDocumentId,
     since: v.number(),
-    numItems: v.optional(v.number()),
-    cursor: v.optional(v.string()),
+    numItems: v.optional(v.number()),    
   },
   handler: async (ctx, args) => {
     const result = await ctx.db
       .query("automerge")
       .withIndex("documentId", (q) =>
-        q.eq("documentId", args.documentId).gt("_creationTime", args.since)
+        q.eq("documentId", args.documentId).gt("seqNo", args.since)
       )
-      .paginate({
-        numItems: args.numItems ?? 10,
-        cursor: args.cursor ?? null,
-      });
-
-    // For the first page, also reach further back to avoid missing changes
-    // inserted out of order.
-    // This isn't part of the paginate call, since the cursors wouldn't
-    // stay consistent if they're based on Date.now().
-    if (!args.cursor) {
-      const retentionBuffer = await ctx.db
-        .query("automerge")
-        .withIndex("documentId", (q) =>
-          q
-            .eq("documentId", args.documentId)
-            .gt("_creationTime", args.since - RETENTION_BUFFER)
-            .lte("_creationTime", args.since)
-        )
-        .collect();
-      result.page = retentionBuffer.concat(result.page);
-    }
+      .take(args.numItems ?? 10);
     return result;
+  },
+});
+
+export const maxSeqNo = query({
+  args: { documentId: vDocumentId },
+  handler: async (ctx, args) => {
+    const max = await ctx.db
+      .query("automerge")
+      .withIndex("documentId", (q) => q.eq("documentId", args.documentId))
+      .order("desc")
+      .first();
+    return max ? max.seqNo : 0;
   },
 });
 

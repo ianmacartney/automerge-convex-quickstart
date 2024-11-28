@@ -17,6 +17,7 @@
     "@automerge/automerge-repo-react-hooks": "^1.2.1",
     "@automerge/automerge-repo-storage-indexeddb": "^1.2.1",
     "@picocss/pico": "^2.0.6",
+    "async-channel": "^0.2.0",
     "convex": "^1.17.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
